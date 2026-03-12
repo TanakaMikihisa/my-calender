@@ -8,14 +8,21 @@
 import SwiftUI
 
 struct ContentView: View {
+    @State private var appViewModel = AppViewModel()
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        Group {
+            if appViewModel.isReady {
+                DayView()
+            } else if let message = appViewModel.errorMessage {
+                ContentUnavailableView("起動できませんでした", systemImage: "exclamationmark.triangle", description: Text(message))
+            } else {
+                ProgressView()
+            }
         }
-        .padding()
+        .task {
+            appViewModel.bootstrap()
+        }
     }
 }
 
