@@ -14,7 +14,7 @@ struct DayView: View {
     @AppStorage(Constants.appStorageIsOneHourUnit) private var isOneHourUnit = true
 
     @State private var viewModel = DayViewModel(
-        weatherRepository: DefaultWeatherRepository(locationRepository: DefaultLocationRepository())
+        weatherRepository: WeatherKitWeatherRepository(locationRepository: DefaultLocationRepository())
     )
     @State private var isPresentingCreateSheet = false
     @State private var showErrorAlert = false
