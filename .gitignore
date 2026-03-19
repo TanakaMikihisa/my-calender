@@ -1,1 +1,24 @@
+# cache
 .DS_Store
+
+# agent
+.cursor/
+.agent/
+CALUDE.md
+
+# private
+private/
+docs/
+*.md
+*.p12
+*.mobileprovision
+*.cer
+*.key
+*.p8
+*.p12
+*.mobileprovision
+*.cer
+*.key
+*.p8
+*.p12
+*.mobileprovision
