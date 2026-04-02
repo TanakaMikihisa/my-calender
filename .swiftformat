@@ -1,0 +1,59 @@
+# swift-format configuration file
+# Rule List: https://github.com/nicklockwood/SwiftFormat/blob/master/Rules.md
+
+# --------------------
+# File Options
+# --------------------
+--swiftversion 5.6
+--exclude Pods,Carthage,BuildTools
+
+# --------------------
+# Formatting Options
+# --------------------
+
+# 複数行の配列や辞書などで、最後のカンマを強制的に削除する
+--commas inline
+
+# "0...9" のような範囲演算子の周りにスペースを入れない
+--ranges no-space
+
+# 空白に関する設定
+--trimwhitespace always
+
+# 引数が複数ある場合、引数ごとに改行する
+--wraparguments before-first
+
+# インデントをスペース4つに設定 (お好みで)
+--indent 4
+
+
+# --------------------
+# Opt-in Rules (有効化するルール)
+# --------------------
+
+# import文をアルファベット順にソートする
+--sorted-patterns
+
+# .count == 0 を .isEmpty に置換する
+--enable isEmpty
+
+
+# ----------------------------------------------------
+# Disabled Rules (デフォルトから無効化しているルール)
+# ----------------------------------------------------
+
+--disable enumNamespaces
+--disable extensionAccessControl
+--disable preferKeyPath
+--disable redundantExtensionACL
+--disable redundantObjc
+--disable redundantReturn
+--disable redundantSelf
+--disable semicolons          # 行末のセミコロンを自動削除しない
+--disable strongOutlets
+--disable strongifiedSelf
+--disable todos               # FIXME/TODOコメントに関するルールを無効化
+--disable typeSugar           # [Int] を Array<Int> に変換しない
+--disable unusedArguments     # 未使用の引数に `_` を自動付与しない
+--disable void                # () を Void に変換しない
+--disable wrapMultilineStatementBraces
