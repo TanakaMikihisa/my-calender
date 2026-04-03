@@ -66,6 +66,9 @@ struct DayView: View {
     @State private var monthlyWorkShiftViewModel = MonthlyWorkShiftViewModel(month: Date())
     /// 月カレンダー内を「今日」の月へスクロールさせる（`MonthlyCalendarView` が `onChange` で処理）
     @State private var monthCalendarScrollToTodayTrigger: UUID?
+    /// 月カレンダーで日付を選んだときに開く「その日の時間軸」シート
+    @State private var calendarDayTimelineSheetItem: CalendarDayTimelineSheetItem?
+    @State private var sheetScheduleDetailItem: ScheduleDetailItem?
 
     private var dayStart: Date { viewModel.date.startOfDay() }
     private var dayEnd: Date {
@@ -241,11 +244,10 @@ struct DayView: View {
                                 tags: viewModel.tags,
                                 isLoading: viewModel.isLoadingCalendarRange,
                                 onSelectDay: { day in
-                                    viewModel.date = day
-                                    withAnimation(.linear) {
-                                        displayMode = isTimeAxisMode ? .day(.hourlyTimeline) : .day(.list)
-                                    }
+                                    let d = day.startOfDay()
+                                    viewModel.date = d
                                     viewModel.refresh()
+                                    calendarDayTimelineSheetItem = CalendarDayTimelineSheetItem(dayStart: d)
                                 },
                                 onRefresh: {
                                     await viewModel.refreshCalendarRangeAsync(around: calendarAnchorMonth)
@@ -398,6 +400,18 @@ struct DayView: View {
                 )
                 .presentationDetents([.fraction(0.2)])
                 .presentationDragIndicator(.visible)
+            }
+            .sheet(item: $calendarDayTimelineSheetItem, onDismiss: { sheetScheduleDetailItem = nil }) { item in
+                CalendarDayTimelineSheetHost(
+                    dayStart: item.dayStart,
+                    viewModel: viewModel,
+                    sheetDetail: $sheetScheduleDetailItem,
+                    displayMode: displayMode,
+                    calendarAnchorMonth: calendarAnchorMonth,
+                    onDismissSheet: {
+                        calendarDayTimelineSheetItem = nil
+                    }
+                )
             }
             .onChange(of: viewModel.errorMessage) { _, new in
                 if new != nil {
@@ -626,6 +640,77 @@ struct DayView: View {
             .foregroundStyle(.white)
             .frame(width: 56, height: 56)
             .background(Circle().fill(.black.opacity(0.5)))
+    }
+}
+
+// MARK: - 月カレンダーから開く 1 日タイムラインシート
+
+private struct CalendarDayTimelineSheetItem: Identifiable, Hashable {
+    let dayStart: Date
+    var id: Date { dayStart }
+}
+
+private struct CalendarDayTimelineSheetHost: View {
+    let dayStart: Date
+    @Bindable var viewModel: DayViewModel
+    @Binding var sheetDetail: ScheduleDetailItem?
+    let displayMode: DayViewMode
+    let calendarAnchorMonth: Date
+    let onDismissSheet: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(Self.title(for: dayStart))
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 20)
+
+                TimeAxisDayView(
+                    dayStart: dayStart,
+                    unitMinutes: 60,
+                    events: viewModel.events,
+                    workShifts: viewModel.workShifts,
+                    tags: viewModel.tags,
+                    payRates: viewModel.payRates,
+                    hourlyRates: viewModel.hourlyRates,
+                    shiftTemplates: viewModel.shiftTemplates,
+                    onSelectEvent: { sheetDetail = .event($0) },
+                    onSelectWorkShift: { sheetDetail = .workShift($0) },
+                    onDeleteEvent: { viewModel.deleteEvent($0) },
+                    onDeleteWorkShift: { viewModel.deleteWorkShift($0) },
+                    onRefresh: { await viewModel.refreshAsync() }
+                )
+                .navigationDestination(item: $sheetDetail) { item in
+                    ScheduleDetailView(
+                        item: item,
+                        tags: viewModel.tags,
+                        payRates: viewModel.payRates,
+                        hourlyRates: viewModel.hourlyRates,
+                        shiftTemplates: viewModel.shiftTemplates,
+                        onRefresh: {
+                            viewModel.refresh()
+                            if displayMode == .monthlyCalendar {
+                                viewModel.refreshCalendarRange(around: calendarAnchorMonth)
+                            }
+                        },
+                        onDismiss: { sheetDetail = nil }
+                    )
+                }
+            }
+        }
+        .presentationDetents([.fraction(0.6), .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private static func title(for day: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ja_JP")
+        f.dateStyle = .long
+        f.timeStyle = .none
+        return f.string(from: day)
     }
 }
 
