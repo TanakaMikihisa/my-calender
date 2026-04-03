@@ -3,8 +3,8 @@ import Foundation
 // MARK: - メイン画面の表示モード（AppStorage キーとデフォルト）
 
 enum Constants {
-    /// true = 時間軸, false = リスト
-    static let appStorageIsTimeAxisMode = "isTimeAxisMode"
+    /// 右下メニューで最後に選んだ表示（`MainToolbarDisplayOption` の rawValue と一致）
+    static let appStorageLastMainDisplayMode = "lastMainDisplayMode"
 
     /// タグなし時のボックス色（システム色を使うための sentinel）
     static let defaultBoxColorSentinel = "systemGray6"

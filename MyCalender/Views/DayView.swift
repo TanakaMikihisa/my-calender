@@ -42,8 +42,8 @@ private enum MainToolbarDisplayOption: Int, CaseIterable, Hashable {
 }
 
 struct DayView: View {
-    /// 時間軸 vs リストの選択（天気以外で永続化）
-    @AppStorage(Constants.appStorageIsTimeAxisMode) private var isTimeAxisMode = true
+    /// 右下メニューで最後に選んだ表示（起動時に復元）
+    @AppStorage(Constants.appStorageLastMainDisplayMode) private var lastMainDisplayModeRaw: Int = 0
 
     @State private var viewModel = DayViewModel(
         weatherRepository: WeatherKitWeatherRepository(locationRepository: DefaultLocationRepository())
@@ -334,12 +334,6 @@ struct DayView: View {
                     .padding(.trailing, 16)
                     .padding(.bottom, 8)
                 }
-                .onAppear {
-                    if !hasSyncedDisplayModeFromStorage {
-                        hasSyncedDisplayModeFromStorage = true
-                        displayMode = isTimeAxisMode ? .day(.hourlyTimeline) : .day(.list)
-                    }
-                }
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 20)
                         .onChanged { value in
@@ -427,6 +421,20 @@ struct DayView: View {
                 Text(viewModel.errorMessage ?? "")
             }
             .onAppear {
+                if !hasSyncedDisplayModeFromStorage {
+                    hasSyncedDisplayModeFromStorage = true
+                    // 新キー未設定の既存ユーザーは旧 `isTimeAxisMode` から 1 回だけ移行
+                    if UserDefaults.standard.object(forKey: Constants.appStorageLastMainDisplayMode) == nil {
+                        let legacyIsTimeAxis = UserDefaults.standard.object(forKey: "isTimeAxisMode") as? Bool ?? true
+                        lastMainDisplayModeRaw = legacyIsTimeAxis
+                            ? MainToolbarDisplayOption.hourlyTimeline.rawValue
+                            : MainToolbarDisplayOption.list.rawValue
+                    }
+                    let option = MainToolbarDisplayOption(rawValue: lastMainDisplayModeRaw) ?? .hourlyTimeline
+                    if option != toolbarDisplayOption(from: displayMode) {
+                        applyMainDisplayMode(option, animated: false, persistToAppStorage: false)
+                    }
+                }
                 viewModel.refresh()
             }
         }
@@ -454,14 +462,20 @@ struct DayView: View {
     private func applyToolbarDisplay(_ option: MainToolbarDisplayOption) {
         guard option != toolbarDisplayOption(from: displayMode) else { return }
         FeedBack().feedback(.medium)
-        withAnimation(.linear) {
+        applyMainDisplayMode(option, animated: true, persistToAppStorage: true)
+    }
+
+    /// 表示モードを適用。`persistToAppStorage` が true のとき右下で選んだ内容を `lastMainDisplayModeRaw` に保存する。
+    private func applyMainDisplayMode(_ option: MainToolbarDisplayOption, animated: Bool, persistToAppStorage: Bool) {
+        if persistToAppStorage {
+            lastMainDisplayModeRaw = option.rawValue
+        }
+        let apply = {
             switch option {
             case .hourlyTimeline:
                 displayMode = .day(.hourlyTimeline)
-                isTimeAxisMode = true
             case .list:
                 displayMode = .day(.list)
-                isTimeAxisMode = false
             case .monthlyWorkShift:
                 displayMode = .day(.monthlyWorkShift)
                 monthlyViewMonth = viewModel.date
@@ -471,6 +485,11 @@ struct DayView: View {
                 calendarAnchorMonth = viewModel.date
                 displayMode = .monthlyCalendar
             }
+        }
+        if animated {
+            withAnimation(.linear) { apply() }
+        } else {
+            apply()
         }
     }
 
