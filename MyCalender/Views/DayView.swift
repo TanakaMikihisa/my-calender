@@ -440,7 +440,13 @@ struct DayView: View {
                 .presentationDetents([.fraction(0.2)])
                 .presentationDragIndicator(.visible)
             }
-            .sheet(item: $calendarDayTimelineSheetItem, onDismiss: { sheetScheduleDetailItem = nil }) { item in
+            .sheet(item: $calendarDayTimelineSheetItem, onDismiss: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    sheetScheduleDetailItem = nil
+                    // 月カレンダー上の「選択」ハイライトを消すため、選択日を今日に戻す
+                    viewModel.date = viewModel.todayStartOfDay()
+                }
+            }) { item in
                 CalendarDayTimelineSheetHost(
                     dayStart: item.dayStart,
                     viewModel: viewModel,
