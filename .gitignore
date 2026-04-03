@@ -8,6 +8,8 @@ CALUDE.md
 
 # private
 private/
+# Firebase（リポジトリに含めない）
+GoogleService-Info.plist
 docs/
 *.md
 !README.md
