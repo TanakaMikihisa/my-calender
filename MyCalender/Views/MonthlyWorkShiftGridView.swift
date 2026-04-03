@@ -24,22 +24,33 @@ struct MonthlyWorkShiftGridView: View {
     @State private var popoverAnchor: PopoverAnchor?
     @State private var newEntrySheetContext: NewEntrySheetContext?
 
-    private let dateColumnWidth: CGFloat = 50
-    private let columnWidth: CGFloat = 200
-    private let totalColumnWidth: CGFloat = 100
-    private let rowHeight: CGFloat = 44
-    private let headerRowHeight: CGFloat = 40
+    // 勤務表グリッドの固定サイズ（横スクロール内の列幅・行の高さ）
+    private let dateColumnWidth: CGFloat = 50 // 左端：日付ラベル・日番号・「月合計」
+    private let columnWidth: CGFloat = 250 // 会社（列）ごとのシフト表示領域
+    private let totalColumnWidth: CGFloat = 200 // 右端：日別合計・月合計の金額列
+    private let rowHeight: CGFloat = 44 // 1日あたりのデータ行
+    private let headerRowHeight: CGFloat = 40 // 先頭のヘッダー行と末尾の月合計行
 
     var body: some View {
-        ScrollView([.horizontal, .vertical], showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 0) {
-                headerRow
-                ForEach(viewModel.daysInMonth, id: \.self) { day in
-                    dayRow(day: day)
+        Group {
+            if !viewModel.isLoading, viewModel.companyColumns.isEmpty {
+                ContentUnavailableView(
+                    "会社が登録されていません",
+                    systemImage: "building.2",
+                    description: Text("")
+                )
+            } else {
+                ScrollView([.horizontal, .vertical], showsIndicators: true) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        headerRow
+                        ForEach(viewModel.daysInMonth, id: \.self) { day in
+                            dayRow(day: day)
+                        }
+                        footerRow
+                    }
+                    .padding(0)
                 }
-                footerRow
             }
-            .padding(0)
         }
         .overlay {
             if viewModel.isLoading {
@@ -95,7 +106,12 @@ struct MonthlyWorkShiftGridView: View {
                 cell(content: Text(col.title).fontWeight(.medium).lineLimit(1), width: columnWidth, isHeader: true)
                     .overlay(alignment: .trailing) { verticalDivider }
             }
-            cell(content: Text("合計").fontWeight(.medium), width: totalColumnWidth, isHeader: true)
+            cell(
+                content: Text("合計").fontWeight(.medium).multilineTextAlignment(.center),
+                width: totalColumnWidth,
+                isHeader: true,
+                alignment: .center
+            )
         }
         .frame(height: headerRowHeight)
         .background(Color(.systemGray6))
@@ -187,15 +203,24 @@ struct MonthlyWorkShiftGridView: View {
                 cell(content: Text(formatMoney(total)).fontWeight(.medium), width: columnWidth, isHeader: true)
                     .overlay(alignment: .trailing) { verticalDivider }
             }
-            cell(content: Text(formatMoney(viewModel.grandTotal)).fontWeight(.semibold), width: totalColumnWidth, isHeader: true)
+            cell(
+                content: Text(formatMoney(viewModel.grandTotal)).fontWeight(.semibold),
+                width: totalColumnWidth,
+                isHeader: true
+            )
         }
         .frame(height: headerRowHeight)
         .background(Color(.systemGray5))
     }
 
-    private func cell<Content: View>(content: Content, width: CGFloat, isHeader: Bool) -> some View {
+    private func cell<Content: View>(
+        content: Content,
+        width: CGFloat,
+        isHeader: Bool,
+        alignment: Alignment = .leading
+    ) -> some View {
         content
-            .frame(width: width, height: isHeader ? headerRowHeight : rowHeight, alignment: .leading)
+            .frame(width: width, height: isHeader ? headerRowHeight : rowHeight, alignment: alignment)
             .padding(.horizontal, 8)
     }
 
