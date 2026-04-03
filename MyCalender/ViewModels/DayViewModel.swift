@@ -76,10 +76,22 @@ final class DayViewModel {
                 self.errorMessage = nil
             }
             await MainActor.run { loadTagsPayRatesAndWeatherInBackground() }
+            rescheduleDailyNotificationsIfNeeded()
         } catch {
             await MainActor.run { self.errorMessage = error.localizedDescription }
         }
         await MainActor.run { isLoading = false }
+    }
+
+    /// 毎日0:00のローカル通知を、最新の予定で再スケジュール
+    private func rescheduleDailyNotificationsIfNeeded() {
+        Task.detached { [authRepository, eventRepository, workShiftRepository] in
+            try? await DailyScheduleNotificationScheduler.shared.reschedule(
+                authRepository: authRepository,
+                eventRepository: eventRepository,
+                workShiftRepository: workShiftRepository
+            )
+        }
     }
 
     /// tags / payRates / 天気は予定追加画面でも使うが、メイン表示用にバックグラウンドで取得（isLoading は立てない）
@@ -156,6 +168,7 @@ final class DayViewModel {
                 self.errorMessage = nil
             }
             await MainActor.run { loadTagsPayRatesAndWeatherInBackground() }
+            rescheduleDailyNotificationsIfNeeded()
         } catch {
             await MainActor.run { self.errorMessage = error.localizedDescription }
         }

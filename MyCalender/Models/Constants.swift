@@ -6,6 +6,9 @@ enum Constants {
     /// 右下メニューで最後に選んだ表示（`MainToolbarDisplayOption` の rawValue と一致）
     static let appStorageLastMainDisplayMode = "lastMainDisplayMode"
 
+    /// 毎日0:00の予定通知（デフォルト ON）
+    static let appStorageDailyScheduleNotificationEnabled = "dailyScheduleNotificationEnabled"
+
     /// タグなし時のボックス色（システム色を使うための sentinel）
     static let defaultBoxColorSentinel = "systemGray6"
 

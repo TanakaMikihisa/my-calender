@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(Constants.appStorageDailyScheduleNotificationEnabled) private var dailyScheduleNotificationEnabled = true
     @State private var viewModel = SettingsViewModel()
     @State private var showTagForm = false
     @State private var editingTag: Tag?
@@ -11,6 +12,19 @@ struct SettingsSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("通知") {
+                    Toggle("毎日0:00に予定を通知", isOn: $dailyScheduleNotificationEnabled)
+                        .onChange(of: dailyScheduleNotificationEnabled) { _, new in
+                            FeedBack().feedback(.light)
+                            Task {
+                                if new {
+                                    try? await DailyScheduleNotificationScheduler.shared.reschedule()
+                                } else {
+                                    await DailyScheduleNotificationScheduler.shared.removeAllDailyNotifications()
+                                }
+                            }
+                        }
+                }
                 Section("タグ") {
                     if viewModel.isLoading, viewModel.tags.isEmpty {
                         SavingReturnArrowOverlay(isSaving: true, clipsScrimToParentBounds: true)
