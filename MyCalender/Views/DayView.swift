@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 1日まわりの表示（ツールバー1本で「リスト → 勤務表 → 1時間おき」→ リスト…と巡回）
+/// 1日まわりの表示（右下メニューで表示モードを選択）
 private enum DayPanelKind: Equatable {
     /// 1時間おきの時間軸
     case hourlyTimeline
@@ -14,8 +14,8 @@ private enum DayViewMode: Equatable {
     case monthlyCalendar
 }
 
-/// ツールバー表示切替用（現在の `DayViewMode` と1対1。ボタンで rawValue 順に巡回）
-private enum MainToolbarDisplayOption: Int, CaseIterable {
+/// 右下メニュー／Picker 用（現在の `DayViewMode` と1対1）
+private enum MainToolbarDisplayOption: Int, CaseIterable, Hashable {
     case hourlyTimeline = 0
     case list = 1
     case monthlyWorkShift = 2
@@ -23,10 +23,10 @@ private enum MainToolbarDisplayOption: Int, CaseIterable {
 
     var title: String {
         switch self {
-        case .hourlyTimeline: return "1時間おき"
-        case .list: return "リスト"
-        case .monthlyWorkShift: return "勤務表"
-        case .monthlyCalendar: return "月カレンダー"
+        case .hourlyTimeline: return "タイムライン"
+        case .list: return "スタック"
+        case .monthlyWorkShift: return "ワークシフト"
+        case .monthlyCalendar: return "カレンダー"
         }
     }
 
@@ -53,6 +53,8 @@ struct DayView: View {
     @State private var selectedDetailItem: ScheduleDetailItem?
     /// 横スワイプの現在値（正=右方向=前日、負=左方向=翌日）。矢印表示に使用
     @State private var swipeTranslation: CGFloat = 0
+    /// 「今日」ボタン用の巻き戻し風エフェクト（0=非表示、1=最大）。`swipeTranslation` とは独立
+    @State private var goToTodayReturnEffectProgress: CGFloat = 0
     @State private var displayMode: DayViewMode = .day(.hourlyTimeline)
     @State private var hasSyncedDisplayModeFromStorage = false
     @State private var showWeatherSheet = false
@@ -62,6 +64,8 @@ struct DayView: View {
     @State private var calendarAnchorMonth = Date()
     @State private var monthCalendarViewModel = MonthCalendarViewModel()
     @State private var monthlyWorkShiftViewModel = MonthlyWorkShiftViewModel(month: Date())
+    /// 月カレンダー内を「今日」の月へスクロールさせる（`MonthlyCalendarView` が `onChange` で処理）
+    @State private var monthCalendarScrollToTodayTrigger: UUID?
 
     private var dayStart: Date { viewModel.date.startOfDay() }
     private var dayEnd: Date {
@@ -113,13 +117,6 @@ struct DayView: View {
             VStack(spacing: 0) {
                 // 上バー：左に天気、右に日付 or 月ナビ（< ○月 >）
                 ZStack(alignment: .topLeading) {
-                    HStack(spacing: 0) {
-                        Spacer(minLength: 0)
-                            .frame(minWidth: 150)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-
                     if case .day(.monthlyWorkShift) = displayMode {
                         HStack {
                             dayWeatherView
@@ -170,6 +167,7 @@ struct DayView: View {
                     }
                 }
                 .frame(height: isRainMode ? 112 : 64)
+                .padding(.top, 16)
                 .onChange(of: viewModel.date) { _, _ in
                     switch displayMode {
                     case .monthlyCalendar:
@@ -251,7 +249,8 @@ struct DayView: View {
                                 },
                                 onRefresh: {
                                     await viewModel.refreshCalendarRangeAsync(around: calendarAnchorMonth)
-                                }
+                                },
+                                scrollToTodayTrigger: $monthCalendarScrollToTodayTrigger
                             )
                         case .day(.monthlyWorkShift):
                             MonthlyWorkShiftGridView(
@@ -266,6 +265,72 @@ struct DayView: View {
 
                     // スワイプ方向の矢印インジケータ（横スワイプ中に表示）
                     swipeArrowOverlay
+                    // 「今日」ボタン専用：左右スワイプとは別の return / 巻き戻し風
+                    goToTodayReturnOverlay
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    // 月カレンダーは子の LazyVStack で下余白済み。他モードは右下 FAB・左下「今日」と干渉しないよう確保する
+                    if displayMode != .monthlyCalendar {
+                        Color.clear.frame(height: 72)
+                    }
+                }
+                .overlay(alignment: .bottomLeading) {
+                    Button {
+                        goToToday()
+                    } label: {
+                        Image(systemName: "eject.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 20)
+                            .background(
+                                Circle()
+                                    .fill(Color(.systemBackground))
+                                    .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("今日に移動")
+                    .padding(.leading, 16)
+                    .padding(.bottom, 8)
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    HStack(spacing: 25) {
+                        Menu {
+                            Picker("表示", selection: toolbarDisplayPickerBinding) {
+                                ForEach(MainToolbarDisplayOption.allCases, id: \.self) { option in
+                                    Label(option.title, systemImage: option.symbolName)
+                                        .tag(option)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.inline)
+                        } label: {
+                            Image(systemName: toolbarDisplayOption(from: displayMode).symbolName)
+                                .font(.title2.weight(.semibold))
+                                .foregroundStyle(Color.primary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("表示を切り替え")
+
+                        Button {
+                            FeedBack().feedback(.medium)
+                            isPresentingCreateSheet = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.title2.weight(.semibold))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 15)
+                    .background(
+                        Capsule()
+                            .fill(Color(.systemBackground))
+                            .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                    )
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 8)
                 }
                 .onAppear {
                     if !hasSyncedDisplayModeFromStorage {
@@ -310,26 +375,6 @@ struct DayView: View {
                             }
                         }
                 )
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        cycleToolbarDisplay()
-                    } label: {
-                        Image(systemName: toolbarDisplayOption(from: displayMode).symbolName)
-                    }
-                    .tint(Color.black)
-                    .accessibilityLabel("表示: \(toolbarDisplayOption(from: displayMode).title)")
-                    .accessibilityHint("次の表示に切り替え")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        FeedBack().feedback(.medium)
-                        isPresentingCreateSheet = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                }
             }
             .navigationDestination(for: ScheduleDetailItem.self) { item in
                 ScheduleDetailView(item: item, tags: viewModel.tags, payRates: viewModel.payRates, hourlyRates: viewModel.hourlyRates, shiftTemplates: viewModel.shiftTemplates, onRefresh: { viewModel.refresh() }, onDismiss: nil)
@@ -385,14 +430,11 @@ struct DayView: View {
         }
     }
 
-    /// 1時間おき → リスト → 勤務表 → 月カレンダー → 1時間おき …
-    private func nextToolbarDisplay(after current: MainToolbarDisplayOption) -> MainToolbarDisplayOption {
-        MainToolbarDisplayOption(rawValue: current.rawValue + 1) ?? .hourlyTimeline
-    }
-
-    private func cycleToolbarDisplay() {
-        let next = nextToolbarDisplay(after: toolbarDisplayOption(from: displayMode))
-        applyToolbarDisplay(next)
+    private var toolbarDisplayPickerBinding: Binding<MainToolbarDisplayOption> {
+        Binding(
+            get: { toolbarDisplayOption(from: displayMode) },
+            set: { applyToolbarDisplay($0) }
+        )
     }
 
     private func applyToolbarDisplay(_ option: MainToolbarDisplayOption) {
@@ -415,6 +457,25 @@ struct DayView: View {
                 calendarAnchorMonth = viewModel.date
                 displayMode = .monthlyCalendar
             }
+        }
+    }
+
+    /// 日付を今日にし、月カレンダーでは該当月へスクロール。勤務表では表示月を今日の月に合わせる。
+    private func goToToday() {
+        FeedBack().feedback(.medium)
+        playGoToTodayReturnEffect()
+        switch displayMode {
+        case .monthlyCalendar:
+            viewModel.selectTodayAndRefreshCalendarRange()
+            calendarAnchorMonth = viewModel.date
+            monthCalendarScrollToTodayTrigger = UUID()
+        case .day(.monthlyWorkShift):
+            viewModel.selectToday()
+            monthlyViewMonth = viewModel.date
+            monthlyWorkShiftViewModel.month = monthlyViewMonth
+            monthlyWorkShiftViewModel.refresh()
+        case .day(.hourlyTimeline), .day(.list):
+            viewModel.selectToday()
         }
     }
 
@@ -489,6 +550,42 @@ struct DayView: View {
     }
 
     // MARK: - スワイプ矢印オーバーレイ
+
+    /// 「今日」専用：中央付近に return（Uターン）アイコンを一瞬出す（スワイプ矢印とは別レイヤー）
+    private func playGoToTodayReturnEffect() {
+        goToTodayReturnEffectProgress = 0
+        withAnimation(.easeOut(duration: 0.22)) {
+            goToTodayReturnEffectProgress = 1
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 220_000_000)
+            withAnimation(.easeIn(duration: 0.38)) {
+                goToTodayReturnEffectProgress = 0
+            }
+        }
+    }
+
+    private var goToTodayReturnOverlay: some View {
+        let p = goToTodayReturnEffectProgress
+        let opacity = Double(p * 0.92)
+        let scale = 0.58 + 0.42 * p
+
+        return ZStack {
+            if p > 0.001 {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.system(size: 30, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 60, height: 60)
+                    .background(Circle().fill(.black.opacity(0.5)))
+                    .scaleEffect(scale)
+                    .opacity(opacity)
+                    // 中央付近だけ戻る方向に傾く（フェードアウト端で変な回転にならないよう sin）
+                    .rotationEffect(.degrees(-26 * sin(Double(p) * .pi)))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .allowsHitTesting(false)
+    }
 
     private var swipeArrowOverlay: some View {
         let progress = min(1, abs(swipeTranslation) / 100)

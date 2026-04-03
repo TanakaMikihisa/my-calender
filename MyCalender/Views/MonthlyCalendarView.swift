@@ -12,6 +12,8 @@ struct MonthlyCalendarView: View {
     var isLoading: Bool
     var onSelectDay: (Date) -> Void
     var onRefresh: () async -> Void
+    /// 親（`DayView`）の「今日」ボタンから `UUID` を渡すと、その月へスクロールする
+    @Binding var scrollToTodayTrigger: UUID?
 
     init(
         viewModel: MonthCalendarViewModel,
@@ -22,7 +24,8 @@ struct MonthlyCalendarView: View {
         tags: [Tag],
         isLoading: Bool,
         onSelectDay: @escaping (Date) -> Void,
-        onRefresh: @escaping () async -> Void
+        onRefresh: @escaping () async -> Void,
+        scrollToTodayTrigger: Binding<UUID?> = .constant(nil)
     ) {
         self.viewModel = viewModel
         self.anchorMonth = anchorMonth
@@ -33,6 +36,7 @@ struct MonthlyCalendarView: View {
         self.isLoading = isLoading
         self.onSelectDay = onSelectDay
         self.onRefresh = onRefresh
+        self._scrollToTodayTrigger = scrollToTodayTrigger
     }
 
     private var monthStarts: [Date] {
@@ -58,18 +62,6 @@ struct MonthlyCalendarView: View {
                         .scaleEffect(1.2)
                 }
             }
-            .overlay(alignment: .bottomLeading) {
-                todayButton {
-                    let today = viewModel.todayStartOfDay()
-                    selectedDate = today
-                    FeedBack().feedback(.medium)
-                    withAnimation(.easeInOut(duration: 0.35)) {
-                        proxy.scrollTo(viewModel.monthId(for: today.startOfMonth()), anchor: .top)
-                    }
-                }
-                .padding(.leading, 16)
-                .padding(.bottom, 8)
-            }
             .onAppear {
                 let initial = anchorMonth.startOfMonth()
                 let id = viewModel.monthId(for: initial)
@@ -81,6 +73,16 @@ struct MonthlyCalendarView: View {
                 let m = newValue.startOfMonth()
                 withAnimation(.easeInOut(duration: 0.25)) {
                     proxy.scrollTo(viewModel.monthId(for: m), anchor: .top)
+                }
+            }
+            .onChange(of: scrollToTodayTrigger) { _, newValue in
+                guard newValue != nil else { return }
+                let today = viewModel.todayStartOfDay()
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    proxy.scrollTo(viewModel.monthId(for: today.startOfMonth()), anchor: .top)
+                }
+                DispatchQueue.main.async {
+                    scrollToTodayTrigger = nil
                 }
             }
         }
@@ -150,10 +152,6 @@ struct MonthlyCalendarView: View {
                         Circle()
                             .fill(Color.red)
                             .frame(width: 32, height: 32)
-                    } else if state.isSelected {
-                        Circle()
-                            .strokeBorder(Color.accentColor, lineWidth: 2)
-                            .frame(width: 32, height: 32)
                     }
                     Text("\(state.dayNumber)")
                         .font(.body.weight(.semibold))
@@ -171,6 +169,7 @@ struct MonthlyCalendarView: View {
                             .fill(barFillColor(hex: hex))
                             .frame(height: 3)
                             .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 6)
                     }
                 }
                 .frame(height: state.barColorHexes.isEmpty ? 0 : 3)
@@ -186,21 +185,6 @@ struct MonthlyCalendarView: View {
             return Color(.systemGray5).opacity(0.5)
         }
         return Color.from(hex: hex).opacity(0.85)
-    }
-
-    private func todayButton(action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: "eject.fill")
-                .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(
-                    Capsule()
-                        .fill(Color(.systemBackground))
-                        .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
-                )
-        }
-        .buttonStyle(.plain)
     }
 }
 

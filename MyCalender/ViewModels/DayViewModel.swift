@@ -165,4 +165,20 @@ final class DayViewModel {
     func refreshCalendarRange(around center: Date) {
         Task { await refreshCalendarRangeAsync(around: center) }
     }
+
+    /// ローカル日の「今日」0:00
+    func todayStartOfDay() -> Date {
+        Calendar.current.startOfDay(for: Date())
+    }
+
+    /// メインの選択日を今日にする（単日ビューでは `date` 変更に伴う `refresh` は View 側の `onChange` に任せる）
+    func selectToday() {
+        date = todayStartOfDay()
+    }
+
+    /// 選択日を今日にし、月カレンダー用の範囲データを再取得する
+    func selectTodayAndRefreshCalendarRange() {
+        selectToday()
+        refreshCalendarRange(around: date)
+    }
 }
