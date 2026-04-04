@@ -62,8 +62,8 @@ struct MonthlyWorkShiftGridView: View {
             viewModel.month = selectedMonth
             viewModel.refresh()
         }
-        .onChange(of: selectedMonth) { _, new in
-            viewModel.month = new
+        .onChange(of: selectedMonth) {
+            viewModel.month = selectedMonth
             viewModel.refresh()
         }
         .sheet(item: $popoverAnchor, onDismiss: { popoverAnchor = nil }) { anchor in

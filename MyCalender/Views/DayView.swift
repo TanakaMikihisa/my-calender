@@ -173,7 +173,7 @@ struct DayView: View {
                 }
                 .frame(height: isRainMode ? 112 : 64)
                 .padding(.top, 16)
-                .onChange(of: viewModel.date) { _, _ in
+                .onChange(of: viewModel.date) {
                     switch displayMode {
                     case .monthlyCalendar:
                         break
@@ -183,8 +183,8 @@ struct DayView: View {
                         viewModel.refresh()
                     }
                 }
-                .onChange(of: displayMode) { _, newMode in
-                    switch newMode {
+                .onChange(of: displayMode) {
+                    switch displayMode {
                     case let .day(kind):
                         switch kind {
                         case .hourlyTimeline, .list:
@@ -458,8 +458,8 @@ struct DayView: View {
                     }
                 )
             }
-            .onChange(of: viewModel.errorMessage) { _, new in
-                if new != nil {
+            .onChange(of: viewModel.errorMessage) {
+                if viewModel.errorMessage != nil {
                     showErrorAlert = true
                 }
             }
@@ -488,8 +488,8 @@ struct DayView: View {
                 }
                 viewModel.refresh()
             }
-            .onChange(of: displayMode) { _, newMode in
-                if newMode != .monthlyCalendar {
+            .onChange(of: displayMode) {
+                if displayMode != .monthlyCalendar {
                     clearMonthCalendarMultiSelection()
                 }
             }

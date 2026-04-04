@@ -14,10 +14,10 @@ struct SettingsSheet: View {
             Form {
                 Section("通知") {
                     Toggle("毎日0:00に予定を通知", isOn: $dailyScheduleNotificationEnabled)
-                        .onChange(of: dailyScheduleNotificationEnabled) { _, new in
+                        .onChange(of: dailyScheduleNotificationEnabled) {
                             FeedBack().feedback(.light)
                             Task {
-                                if new {
+                                if dailyScheduleNotificationEnabled {
                                     try? await DailyScheduleNotificationScheduler.shared.reschedule()
                                 } else {
                                     await DailyScheduleNotificationScheduler.shared.removeAllDailyNotifications()
@@ -850,8 +850,8 @@ struct ShiftTemplateFormSheet: View {
                         .focused($isShiftNameFocused)
                         .onSubmit { applyTimeRangeFromShiftName() }
                 }
-                .onChange(of: isShiftNameFocused) { old, new in
-                    if old == true, !new { applyTimeRangeFromShiftName() }
+                .onChange(of: isShiftNameFocused) {
+                    if !isShiftNameFocused { applyTimeRangeFromShiftName() }
                 }
                 Section("勤務時間") {
                     DatePicker("開始", selection: $startTimeDate, displayedComponents: .hourAndMinute)

@@ -80,14 +80,14 @@ struct MonthlyCalendarView: View {
                     proxy.scrollTo(id, anchor: .top)
                 }
             }
-            .onChange(of: anchorMonth) { _, newValue in
-                let m = newValue.startOfMonth()
+            .onChange(of: anchorMonth) {
+                let m = anchorMonth.startOfMonth()
                 withAnimation(.easeInOut(duration: 0.25)) {
                     proxy.scrollTo(viewModel.monthId(for: m), anchor: .top)
                 }
             }
-            .onChange(of: scrollToTodayTrigger) { _, newValue in
-                guard newValue != nil else { return }
+            .onChange(of: scrollToTodayTrigger) {
+                guard scrollToTodayTrigger != nil else { return }
                 let today = viewModel.todayStartOfDay()
                 withAnimation(.easeInOut(duration: 0.35)) {
                     proxy.scrollTo(viewModel.monthId(for: today.startOfMonth()), anchor: .top)
@@ -96,10 +96,10 @@ struct MonthlyCalendarView: View {
                     scrollToTodayTrigger = nil
                 }
             }
-            .onChange(of: isMultiSelectMode) { wasOn, isOn in
-                if wasOn, !isOn {
+            .onChange(of: isMultiSelectMode) {
+                if !isMultiSelectMode {
                     multiSelectedDatesChangedWhileInMode = false
-                } else if !wasOn, isOn {
+                } else {
                     // 「選択」で空のまま入ったときは false のまま。長押しで日付が入る場合は true 相当。
                     multiSelectedDatesChangedWhileInMode = !multiSelectedDates.isEmpty
                 }

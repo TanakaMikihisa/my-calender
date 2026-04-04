@@ -275,8 +275,8 @@ struct CreateItemSheet: View {
             .sheet(isPresented: $showSettingsSheet) {
                 SettingsSheet()
             }
-            .onChange(of: showSettingsSheet) { _, isShowing in
-                if !isShowing {
+            .onChange(of: showSettingsSheet) {
+                if !showSettingsSheet {
                     eventViewModel?.loadTags()
                     workShiftViewModel?.loadPayRates()
                     workShiftViewModel?.loadHourlyRates()
@@ -357,8 +357,8 @@ private struct CreateEventForm: View {
             TextField("メモ", text: $viewModel.note, axis: .vertical)
                 .lineLimit(3...6)
         }
-        .onChange(of: isTitleFocused) { old, new in
-            if old == true, !new { viewModel.applyTimeRangeFromTitleIfNeeded() }
+        .onChange(of: isTitleFocused) {
+            if !isTitleFocused { viewModel.applyTimeRangeFromTitleIfNeeded() }
         }
         Section("タグ") {
             if viewModel.tags.isEmpty {
