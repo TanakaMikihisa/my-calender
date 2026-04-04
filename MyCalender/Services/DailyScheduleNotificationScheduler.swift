@@ -26,14 +26,31 @@ final class DailyScheduleNotificationScheduler: @unchecked Sendable {
     }
 
     /// 通知権限のリクエストと、**次の 0:00** の1件だけ再スケジュール（取得はその日の予定のみ）
+    /// - Note: `actor` リポジトリの既定値は非隔離のデフォルト引数で生成できないため、省略時は本体で生成する。
     func reschedule(
-        authRepository: AuthRepositoryProtocol = FirebaseAuthRepository(),
-        eventRepository: EventRepositoryProtocol = FirestoreEventRepository(),
-        workShiftRepository: WorkShiftRepositoryProtocol = FirestoreWorkShiftRepository()
+        authRepository: AuthRepositoryProtocol? = nil,
+        eventRepository: EventRepositoryProtocol? = nil,
+        workShiftRepository: WorkShiftRepositoryProtocol? = nil
     ) async throws {
         guard isEnabled else {
             await removeAllDailyNotifications()
             return
+        }
+
+        let authRepo: AuthRepositoryProtocol = if let authRepository {
+            authRepository
+        } else {
+            FirebaseAuthRepository()
+        }
+        let eventRepo: EventRepositoryProtocol = if let eventRepository {
+            eventRepository
+        } else {
+            FirestoreEventRepository()
+        }
+        let shiftRepo: WorkShiftRepositoryProtocol = if let workShiftRepository {
+            workShiftRepository
+        } else {
+            FirestoreWorkShiftRepository()
         }
 
         let center = UNUserNotificationCenter.current()
@@ -48,10 +65,10 @@ final class DailyScheduleNotificationScheduler: @unchecked Sendable {
 
         guard targetDayStart > now else { return }
 
-        let uid = try await authRepository.ensureSignedInAnonymously()
+        let uid = try await authRepo.ensureSignedInAnonymously()
 
-        async let eventsTask = eventRepository.listActiveOverlapping(uid: uid, start: targetDayStart, end: dayEnd)
-        async let shiftsTask = workShiftRepository.listActiveOverlapping(uid: uid, start: targetDayStart, end: dayEnd)
+        async let eventsTask = eventRepo.listActiveOverlapping(uid: uid, start: targetDayStart, end: dayEnd)
+        async let shiftsTask = shiftRepo.listActiveOverlapping(uid: uid, start: targetDayStart, end: dayEnd)
 
         let (events, shifts) = try await (eventsTask, shiftsTask)
 
@@ -85,10 +102,26 @@ final class DailyScheduleNotificationScheduler: @unchecked Sendable {
 
     /// 確認用。呼び出し後すぐにスケジュールし、短い間隔で本番と同じタイトル・本文形式の通知を1件出す（遅延は呼び出し側で入れること。トグルOFFでも可）。
     func scheduleTestNotification(
-        authRepository: AuthRepositoryProtocol = FirebaseAuthRepository(),
-        eventRepository: EventRepositoryProtocol = FirestoreEventRepository(),
-        workShiftRepository: WorkShiftRepositoryProtocol = FirestoreWorkShiftRepository()
+        authRepository: AuthRepositoryProtocol? = nil,
+        eventRepository: EventRepositoryProtocol? = nil,
+        workShiftRepository: WorkShiftRepositoryProtocol? = nil
     ) async throws {
+        let authRepo: AuthRepositoryProtocol = if let authRepository {
+            authRepository
+        } else {
+            FirebaseAuthRepository()
+        }
+        let eventRepo: EventRepositoryProtocol = if let eventRepository {
+            eventRepository
+        } else {
+            FirestoreEventRepository()
+        }
+        let shiftRepo: WorkShiftRepositoryProtocol = if let workShiftRepository {
+            workShiftRepository
+        } else {
+            FirestoreWorkShiftRepository()
+        }
+
         let center = UNUserNotificationCenter.current()
         let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
         guard granted else { return }
@@ -99,9 +132,9 @@ final class DailyScheduleNotificationScheduler: @unchecked Sendable {
         let dayEnd = targetDayStart.endOfDay(in: calendar)
         guard targetDayStart > now else { return }
 
-        let uid = try await authRepository.ensureSignedInAnonymously()
-        async let eventsTask = eventRepository.listActiveOverlapping(uid: uid, start: targetDayStart, end: dayEnd)
-        async let shiftsTask = workShiftRepository.listActiveOverlapping(uid: uid, start: targetDayStart, end: dayEnd)
+        let uid = try await authRepo.ensureSignedInAnonymously()
+        async let eventsTask = eventRepo.listActiveOverlapping(uid: uid, start: targetDayStart, end: dayEnd)
+        async let shiftsTask = shiftRepo.listActiveOverlapping(uid: uid, start: targetDayStart, end: dayEnd)
         let (events, shifts) = try await (eventsTask, shiftsTask)
 
         center.removePendingNotificationRequests(withIdentifiers: [testNotificationIdentifier])
