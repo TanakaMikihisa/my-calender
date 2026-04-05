@@ -826,7 +826,7 @@ private struct WeatherRowMarqueeView: View {
             let elapsed = context.date.timeIntervalSinceReferenceDate
             let x = CGFloat(elapsed * Double(scrollSpeed)).truncatingRemainder(dividingBy: unitWidth)
             HStack(spacing: 0) {
-                ForEach(0..<3, id: \.self) { _ in
+                ForEach(0..<8, id: \.self) { _ in
                     HStack(spacing: 12) {
                         ColoredWeatherSymbolView(symbolName: symbolName, fontSize: 48)
                             .frame(width: 48, height: 48)
