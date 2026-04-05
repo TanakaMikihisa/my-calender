@@ -14,6 +14,9 @@ struct MonthlyCalendarView: View {
     @State private var holidayStartOfDays: Set<Date> = []
 
     var anchorMonth: Date
+    /// `DayViewModel` の `calendarExtraPastMonths` と揃える（月グリッドと取得範囲を一致させる）
+    var extraMonthsPast: Int
+    var extraMonthsFuture: Int
     @Binding var selectedDate: Date
     var events: [Event]
     var workShifts: [WorkShift]
@@ -23,12 +26,18 @@ struct MonthlyCalendarView: View {
     @Binding var multiSelectedDates: Set<Date>
     var onSelectDay: (Date) -> Void
     var onRefresh: () async -> Void
+    /// 今月と同じ「月」のブロックが先頭付近で表示されたとき、過去1年分のデータ・グリッドを広げる
+    var onNeedPastYear: () -> Void
+    /// 末尾付近で同様に未来へ
+    var onNeedFutureYear: () -> Void
     /// 親（`DayView`）の「今日」ボタンから `UUID` を渡すと、その月へスクロールする
     @Binding var scrollToTodayTrigger: UUID?
 
     init(
         viewModel: MonthCalendarViewModel,
         anchorMonth: Date,
+        extraMonthsPast: Int = 0,
+        extraMonthsFuture: Int = 0,
         selectedDate: Binding<Date>,
         events: [Event],
         workShifts: [WorkShift],
@@ -38,10 +47,14 @@ struct MonthlyCalendarView: View {
         multiSelectedDates: Binding<Set<Date>> = .constant([]),
         onSelectDay: @escaping (Date) -> Void,
         onRefresh: @escaping () async -> Void,
+        onNeedPastYear: @escaping () -> Void = {},
+        onNeedFutureYear: @escaping () -> Void = {},
         scrollToTodayTrigger: Binding<UUID?> = .constant(nil)
     ) {
         self.viewModel = viewModel
         self.anchorMonth = anchorMonth
+        self.extraMonthsPast = extraMonthsPast
+        self.extraMonthsFuture = extraMonthsFuture
         self._selectedDate = selectedDate
         self.events = events
         self.workShifts = workShifts
@@ -51,19 +64,21 @@ struct MonthlyCalendarView: View {
         self._multiSelectedDates = multiSelectedDates
         self.onSelectDay = onSelectDay
         self.onRefresh = onRefresh
+        self.onNeedPastYear = onNeedPastYear
+        self.onNeedFutureYear = onNeedFutureYear
         self._scrollToTodayTrigger = scrollToTodayTrigger
     }
 
     private var monthStarts: [Date] {
-        viewModel.monthStarts(anchorMonth: anchorMonth)
+        viewModel.monthStarts(anchorMonth: anchorMonth, extraMonthsPast: extraMonthsPast, extraMonthsFuture: extraMonthsFuture)
     }
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: true) {
                 LazyVStack(alignment: .leading, spacing: 28) {
-                    ForEach(monthStarts, id: \.self) { monthStart in
-                        monthSection(monthStart: monthStart)
+                    ForEach(Array(monthStarts.enumerated()), id: \.element) { index, monthStart in
+                        monthSection(monthStart: monthStart, index: index)
                             .id(viewModel.monthId(for: monthStart))
                     }
                 }
@@ -129,7 +144,7 @@ struct MonthlyCalendarView: View {
         }
     }
 
-    private func monthSection(monthStart: Date) -> some View {
+    private func monthSection(monthStart: Date, index: Int) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(viewModel.monthTitle(for: monthStart))
                 .font(.title.weight(.bold))
@@ -152,6 +167,19 @@ struct MonthlyCalendarView: View {
                         .fill(Color(.separator).opacity(0.35))
                         .frame(height: 0.5)
                 }
+            }
+        }
+        .onAppear {
+            let cal = Calendar.current
+            let thisMonth = cal.component(.month, from: Date())
+            guard cal.component(.month, from: monthStart) == thisMonth else { return }
+            let n = monthStarts.count
+            // 先頭／末尾付近の「今月と同じ月」が見えたら親へ通知（親＋VM のクールダウンで連打を抑止）
+            if index < 6 {
+                onNeedPastYear()
+            }
+            if n >= 12, index >= n - 6 {
+                onNeedFutureYear()
             }
         }
     }

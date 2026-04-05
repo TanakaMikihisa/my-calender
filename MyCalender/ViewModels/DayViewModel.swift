@@ -29,6 +29,12 @@ final class DayViewModel {
     var calendarRangeEvents: [Event] = []
     var calendarRangeWorkShifts: [WorkShift] = []
     var isLoadingCalendarRange: Bool = false
+    /// 月カレンダー縦スクロールの基準±24か月に足す過去分（12か月単位で増やす）
+    var calendarExtraPastMonths: Int = 0
+    /// 同上・未来側
+    var calendarExtraFutureMonths: Int = 0
+    private var lastCalendarExpandPastAt: Date?
+    private var lastCalendarExpandFutureAt: Date?
     var errorMessage: String?
 
     init(
@@ -146,15 +152,17 @@ final class DayViewModel {
         }
     }
 
-    /// 月カレンダー表示用：指定月を中心に前後12か月ぶんの予定を読み込む（単日表示の配列は上書きしない）。
+    /// 月カレンダー表示用：指定月を中心に前後24か月＋拡張分の予定を読み込む（単日表示の配列は上書きしない）。
     func refreshCalendarRangeAsync(around center: Date) async {
         await MainActor.run { isLoadingCalendarRange = true }
         do {
             let uid = try await authRepository.ensureSignedInAnonymously()
             let cal = Calendar.current
             let monthStart = center.startOfMonth()
-            guard let fetchStart = cal.date(byAdding: .month, value: -12, to: monthStart),
-                  let fetchEnd = cal.date(byAdding: .month, value: 13, to: monthStart)
+            let past = 24 + calendarExtraPastMonths
+            let futureExclusive = 25 + calendarExtraFutureMonths
+            guard let fetchStart = cal.date(byAdding: .month, value: -past, to: monthStart),
+                  let fetchEnd = cal.date(byAdding: .month, value: futureExclusive, to: monthStart)
             else {
                 await MainActor.run { isLoadingCalendarRange = false }
                 return
@@ -177,6 +185,34 @@ final class DayViewModel {
 
     func refreshCalendarRange(around center: Date) {
         Task { await refreshCalendarRangeAsync(around: center) }
+    }
+
+    /// 月カレンダーモードに入り直したときなど、表示範囲の拡張を初期化する
+    func resetCalendarRangeExpansion() {
+        calendarExtraPastMonths = 0
+        calendarExtraFutureMonths = 0
+        lastCalendarExpandPastAt = nil
+        lastCalendarExpandFutureAt = nil
+    }
+
+    /// 「今月」と同じ月のブロックが一覧の手前に見えたら過去へ1年分広げる（連打・連続レイアウト用に短いクールダウン）
+    func requestExpandCalendarRangePastOneYear(around center: Date) {
+        guard calendarExtraPastMonths < 120 else { return }
+        let now = Date()
+        if let t = lastCalendarExpandPastAt, now.timeIntervalSince(t) < 0.25 { return }
+        lastCalendarExpandPastAt = now
+        calendarExtraPastMonths += 12
+        refreshCalendarRange(around: center)
+    }
+
+    /// 同様に未来側へ1年分
+    func requestExpandCalendarRangeFutureOneYear(around center: Date) {
+        guard calendarExtraFutureMonths < 120 else { return }
+        let now = Date()
+        if let t = lastCalendarExpandFutureAt, now.timeIntervalSince(t) < 0.25 { return }
+        lastCalendarExpandFutureAt = now
+        calendarExtraFutureMonths += 12
+        refreshCalendarRange(around: center)
     }
 
     /// ローカル日の「今日」0:00

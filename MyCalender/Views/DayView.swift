@@ -195,6 +195,7 @@ struct DayView: View {
                         }
                     case .monthlyCalendar:
                         calendarAnchorMonth = viewModel.date
+                        viewModel.resetCalendarRangeExpansion()
                         viewModel.refreshCalendarRange(around: viewModel.date)
                     }
                 }
@@ -237,6 +238,8 @@ struct DayView: View {
                             MonthlyCalendarView(
                                 viewModel: monthCalendarViewModel,
                                 anchorMonth: calendarAnchorMonth,
+                                extraMonthsPast: viewModel.calendarExtraPastMonths,
+                                extraMonthsFuture: viewModel.calendarExtraFutureMonths,
                                 selectedDate: Binding(
                                     get: { viewModel.date },
                                     set: { viewModel.date = $0 }
@@ -255,6 +258,12 @@ struct DayView: View {
                                 },
                                 onRefresh: {
                                     await viewModel.refreshCalendarRangeAsync(around: calendarAnchorMonth)
+                                },
+                                onNeedPastYear: {
+                                    viewModel.requestExpandCalendarRangePastOneYear(around: calendarAnchorMonth)
+                                },
+                                onNeedFutureYear: {
+                                    viewModel.requestExpandCalendarRangeFutureOneYear(around: calendarAnchorMonth)
                                 },
                                 scrollToTodayTrigger: $monthCalendarScrollToTodayTrigger
                             )

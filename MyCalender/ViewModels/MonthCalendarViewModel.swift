@@ -23,11 +23,11 @@ final class MonthCalendarViewModel {
         return "\(y)年\(mo)月"
     }
 
-    /// 基準月の前後24か月分の各月1日 0:00（縦スクロール用）
-    func monthStarts(anchorMonth: Date) -> [Date] {
+    /// 基準月の前後24か月＋追加分の各月1日 0:00（縦スクロール用）。追加は親がデータ取得範囲と揃える。
+    func monthStarts(anchorMonth: Date, extraMonthsPast: Int = 0, extraMonthsFuture: Int = 0) -> [Date] {
         let anchor = anchorMonth.startOfMonth()
-        guard let start = calendar.date(byAdding: .month, value: -24, to: anchor),
-              let endExclusive = calendar.date(byAdding: .month, value: 25, to: anchor)
+        guard let start = calendar.date(byAdding: .month, value: -(24 + extraMonthsPast), to: anchor),
+              let endExclusive = calendar.date(byAdding: .month, value: 25 + extraMonthsFuture, to: anchor)
         else { return [] }
         var months: [Date] = []
         var m = start
