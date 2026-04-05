@@ -148,27 +148,17 @@ struct DayView: View {
                         .padding(.trailing, 16)
                         .padding(.top, 8)
                     } else {
-                        HStack(spacing: 0) {
+                        HStack {
+                            dayWeatherView
+                                .onTapGesture {
+                                    FeedBack().feedback(.medium)
+                                    showWeatherSheet = true
+                                }
                             Spacer(minLength: 0)
-                                .frame(minWidth: 150)
-                            DatePicker(
-                                "",
-                                selection: $viewModel.date,
-                                displayedComponents: [.date]
-                            )
-                            .datePickerStyle(.compact)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-
-                        dayWeatherView
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                            .padding(.leading, 16)
-                            .padding(.top, 8)
-                            .onTapGesture {
-                                FeedBack().feedback(.medium)
-                                showWeatherSheet = true
-                            }
+                        .padding(.leading, 16)
+                        .padding(.trailing, 16)
+                        .padding(.top, 8)
                     }
                 }
                 .frame(height: isRainMode ? 112 : 64)
@@ -285,9 +275,9 @@ struct DayView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    // 月カレンダーは子の LazyVStack で下余白済み。他モードは右下 FAB・左下「今日」と干渉しないよう確保する
-                    if displayMode != .monthlyCalendar {
-                        Color.clear.frame(height: 72)
+                    // 月カレンダーは子の LazyVStack で下余白済み。他モードは右下 FAB（＋タイムライン／リスト時は日付カプセル）と干渉しないよう確保する
+                    if let h = bottomFloatingControlsClearanceHeight {
+                        Color.clear.frame(height: h)
                     }
                 }
                 .overlay(alignment: .bottomLeading) {
@@ -311,6 +301,18 @@ struct DayView: View {
                 }
                 .overlay(alignment: .bottomTrailing) {
                     VStack(alignment: .trailing, spacing: 8) {
+                        if showsFloatingDayPicker {
+                            DatePicker(
+                                "",
+                                selection: $viewModel.date,
+                                displayedComponents: [.date]
+                            )
+                            .labelsHidden()
+                            .datePickerStyle(.compact)
+                            .accessibilityLabel("日付を選択")
+                            .transition(.scale(scale: 0.9).combined(with: .opacity))
+                        }
+
                         if displayMode == .monthlyCalendar {
                             Button {
                                 FeedBack().feedback(.medium)
@@ -562,7 +564,7 @@ struct DayView: View {
         clearMonthCalendarMultiSelection()
         guard option != toolbarDisplayOption(from: displayMode) else { return }
         FeedBack().feedback(.medium)
-        applyMainDisplayMode(option, animated: true, persistToAppStorage: true)
+        applyMainDisplayMode(option, animated: false, persistToAppStorage: true)
     }
 
     /// 月カレンダーの複数日選択を解除（表示切り替え操作と連動）
@@ -576,10 +578,29 @@ struct DayView: View {
         displayMode == .monthlyCalendar && isMonthCalendarSelectionMode && !monthCalendarSelectedDates.isEmpty
     }
 
+    /// タイムライン／リスト時のみ、上部バーではなく右下オーバーレイに日付ピッカーを出す
+    private var showsFloatingDayPicker: Bool {
+        if case let .day(k) = displayMode, k == .hourlyTimeline || k == .list { return true }
+        return false
+    }
+
+    /// 右下フローティングコントロール分の下余白（月カレンダーは子が確保）
+    private var bottomFloatingControlsClearanceHeight: CGFloat? {
+        switch displayMode {
+        case .monthlyCalendar: return nil
+        case let .day(kind):
+            switch kind {
+            case .hourlyTimeline, .list:
+                return 108
+            case .monthlyWorkShift:
+                return 72
+            }
+        }
+    }
+
     /// 右下オーバーレイの見た目が変わる条件を1値にまとめ、`animation(_:value:)` 用にする
     private var monthCalendarBottomOverlayAnimationToken: String {
-        let monthly = displayMode == .monthlyCalendar
-        return "\(monthly)-\(isMonthCalendarSelectionMode)-\(isMonthCalendarAddEventCapsuleActive)"
+        return "\(isMonthCalendarSelectionMode)-\(isMonthCalendarAddEventCapsuleActive)-\(showsFloatingDayPicker)"
     }
 
     /// 表示モードを適用。`persistToAppStorage` が true のとき右下で選んだ内容を `lastMainDisplayModeRaw` に保存する。

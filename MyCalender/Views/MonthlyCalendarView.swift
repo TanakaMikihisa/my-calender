@@ -222,7 +222,7 @@ struct MonthlyCalendarView: View {
             }
             FeedBack().feedback(.medium)
             if isMultiSelectMode {
-                withAnimation(.easeInOut(duration: 1.0)) {
+                withAnimation(.easeInOut(duration: 0.2)) {
                     if multiSelectedDates.contains(dayStart) {
                         multiSelectedDates.remove(dayStart)
                     } else {
