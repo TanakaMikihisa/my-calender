@@ -335,48 +335,76 @@ struct DayView: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("複数日選択モード")
+                            .transition(.scale(scale: 0.9).combined(with: .opacity))
                         }
 
-                        HStack(spacing: 25) {
-                            Menu {
-                                Picker("表示", selection: toolbarDisplayPickerBinding) {
-                                    ForEach(MainToolbarDisplayOption.allCases, id: \.self) { option in
-                                        Label(option.title, systemImage: option.symbolName)
-                                            .tag(option)
+                        ZStack {
+                            if isMonthCalendarAddEventCapsuleActive {
+                                Button {
+                                    FeedBack().feedback(.medium)
+                                    isPresentingCreateSheet = true
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "plus")
+                                            .font(.title2.weight(.semibold))
+                                        Text("イベントを追加")
+                                            .font(.headline.weight(.semibold))
                                     }
+                                    .foregroundStyle(Color.white)
                                 }
-                                .labelsHidden()
-                                .pickerStyle(.inline)
-                            } label: {
-                                Image(systemName: toolbarDisplayOption(from: displayMode).symbolName)
-                                    .font(.title2.weight(.semibold))
-                                    .foregroundStyle(Color.primary)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("表示を切り替え")
-                            .simultaneousGesture(
-                                TapGesture().onEnded {
-                                    clearMonthCalendarMultiSelection()
-                                }
-                            )
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("イベントを追加")
+                                .transition(.scale(scale: 0.92).combined(with: .opacity))
+                            } else {
+                                HStack(spacing: 25) {
+                                    Menu {
+                                        Picker("表示", selection: toolbarDisplayPickerBinding) {
+                                            ForEach(MainToolbarDisplayOption.allCases, id: \.self) { option in
+                                                Label(option.title, systemImage: option.symbolName)
+                                                    .tag(option)
+                                            }
+                                        }
+                                        .labelsHidden()
+                                        .pickerStyle(.inline)
+                                    } label: {
+                                        Image(systemName: toolbarDisplayOption(from: displayMode).symbolName)
+                                            .font(.title2.weight(.semibold))
+                                            .foregroundStyle(Color.primary)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("表示を切り替え")
+                                    .simultaneousGesture(
+                                        TapGesture().onEnded {
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                clearMonthCalendarMultiSelection()
+                                            }
+                                        }
+                                    )
 
-                            Button {
-                                FeedBack().feedback(.medium)
-                                isPresentingCreateSheet = true
-                            } label: {
-                                Image(systemName: "plus")
-                                    .font(.title2.weight(.semibold))
+                                    Button {
+                                        FeedBack().feedback(.medium)
+                                        isPresentingCreateSheet = true
+                                    } label: {
+                                        Image(systemName: "plus")
+                                            .font(.title2.weight(.semibold))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .transition(.scale(scale: 0.92).combined(with: .opacity))
                             }
-                            .buttonStyle(.plain)
                         }
                         .padding(.horizontal, 20)
                         .padding(.vertical, 15)
                         .background(
                             Capsule()
-                                .fill(Color(.systemBackground))
+                                .fill(isMonthCalendarAddEventCapsuleActive ? Color.orange : Color(.systemBackground))
                                 .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
                         )
                     }
+                    .animation(
+                        .easeInOut(duration: 0.2),
+                        value: monthCalendarBottomOverlayAnimationToken
+                    )
                     .padding(.trailing, 16)
                     .padding(.bottom, 8)
                 }
@@ -541,6 +569,17 @@ struct DayView: View {
     private func clearMonthCalendarMultiSelection() {
         isMonthCalendarSelectionMode = false
         monthCalendarSelectedDates.removeAll()
+    }
+
+    /// 月カレンダーで複数選択かつ1日以上選ばれているとき、右下を「イベントを追加」カプセル表示にする
+    private var isMonthCalendarAddEventCapsuleActive: Bool {
+        displayMode == .monthlyCalendar && isMonthCalendarSelectionMode && !monthCalendarSelectedDates.isEmpty
+    }
+
+    /// 右下オーバーレイの見た目が変わる条件を1値にまとめ、`animation(_:value:)` 用にする
+    private var monthCalendarBottomOverlayAnimationToken: String {
+        let monthly = displayMode == .monthlyCalendar
+        return "\(monthly)-\(isMonthCalendarSelectionMode)-\(isMonthCalendarAddEventCapsuleActive)"
     }
 
     /// 表示モードを適用。`persistToAppStorage` が true のとき右下で選んだ内容を `lastMainDisplayModeRaw` に保存する。

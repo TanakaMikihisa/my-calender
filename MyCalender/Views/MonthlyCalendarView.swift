@@ -222,10 +222,12 @@ struct MonthlyCalendarView: View {
             }
             FeedBack().feedback(.medium)
             if isMultiSelectMode {
-                if multiSelectedDates.contains(dayStart) {
-                    multiSelectedDates.remove(dayStart)
-                } else {
-                    multiSelectedDates.insert(dayStart)
+                withAnimation(.easeInOut(duration: 1.0)) {
+                    if multiSelectedDates.contains(dayStart) {
+                        multiSelectedDates.remove(dayStart)
+                    } else {
+                        multiSelectedDates.insert(dayStart)
+                    }
                 }
             } else {
                 selectedDate = dayStart

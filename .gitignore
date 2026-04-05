@@ -26,3 +26,4 @@ docs/
 *.p12
 *.mobileprovision
 EnvironmentValue.swift
+test/
