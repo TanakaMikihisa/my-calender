@@ -70,6 +70,12 @@ final class CreateEventViewModel {
         endAt = newEnd
     }
 
+    /// 開始変更で終了が開始以下になった場合、終了を開始+1時間に補正する
+    func normalizeEndAtAfterStartChanged() {
+        guard endAt <= startAt else { return }
+        endAt = startAt.addingTimeInterval(3600)
+    }
+
     func save() async -> Bool {
         guard canSave else { return false }
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)

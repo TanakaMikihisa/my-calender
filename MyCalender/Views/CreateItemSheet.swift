@@ -405,6 +405,9 @@ private struct CreateEventForm: View {
         .onChange(of: isTitleFocused) {
             if !isTitleFocused { viewModel.applyTimeRangeFromTitleIfNeeded() }
         }
+        .onChange(of: viewModel.startAt) {
+            viewModel.normalizeEndAtAfterStartChanged()
+        }
         Section("タグ") {
             if viewModel.tags.isEmpty {
                 Text("タグがありません。右上の設定から追加できます。")
