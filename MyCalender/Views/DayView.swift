@@ -71,7 +71,6 @@ struct DayView: View {
     @State private var sheetScheduleDetailItem: ScheduleDetailItem?
     @State private var isMonthCalendarSelectionMode = false
     @State private var monthCalendarSelectedDates: Set<Date> = []
-    @State private var isPresentingReminderSheet = false
 
     private var dayStart: Date { viewModel.date.startOfDay() }
     private var dayEnd: Date {
@@ -284,24 +283,6 @@ struct DayView: View {
                 .overlay(alignment: .bottomLeading) {
                     VStack(alignment: .leading, spacing: 10) {
                         Button {
-                            FeedBack().feedback(.medium)
-                            isPresentingReminderSheet = true
-                        } label: {
-                            Image(systemName: "hare.fill")
-                                .font(.subheadline.weight(.semibold))
-                                .frame(width: 20, height: 20)
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 20)
-                                .background(
-                                    Circle()
-                                        .fill(Color(.systemBackground))
-                                        .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("通知を登録")
-
-                        Button {
                             goToToday()
                         } label: {
                             Image(systemName: "arrow.uturn.backward")
@@ -499,9 +480,6 @@ struct DayView: View {
                 )
                 .presentationDetents([.fraction(0.2)])
                 .presentationDragIndicator(.visible)
-            }
-            .sheet(isPresented: $isPresentingReminderSheet) {
-                CreateReminderNotificationSheet(defaultDate: viewModel.date)
             }
             .sheet(item: $calendarDayTimelineSheetItem, onDismiss: {
                 withAnimation(.easeInOut(duration: 0.2)) {

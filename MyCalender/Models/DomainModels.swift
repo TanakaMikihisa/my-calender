@@ -107,19 +107,6 @@ struct Tag: Identifiable, Sendable, Hashable {
     var updatedAt: Date
 }
 
-/// 指定日時に単発通知を送るための軽量イベント
-struct RapidEvent: Identifiable, Sendable, Hashable {
-    var id: RapidEventID
-    var notifyAt: Date
-    var title: String
-    var body: String
-    var tagId: TagID?
-    var isNotified: Bool
-    var isActive: Bool
-    var createdAt: Date
-    var updatedAt: Date
-}
-
 /// 表示用の集約モデル（Firestoreの正とは別）
 struct Day: Sendable, Hashable {
     var date: Date

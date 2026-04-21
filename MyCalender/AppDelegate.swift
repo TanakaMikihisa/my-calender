@@ -35,9 +35,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         let providerFactory = MyAppCheckProviderFactory()
         AppCheck.setAppCheckProviderFactory(providerFactory)
         FirebaseApp.configure()
-        Task {
-            await RapidEventNotificationBootstrapper.shared.restorePendingNotificationsAtLaunch()
-        }
         return true
     }
 }

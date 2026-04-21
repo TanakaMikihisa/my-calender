@@ -11,5 +11,4 @@ enum FirestorePaths {
     static var payRates: String { "\(userRoot)/payRates" }
     static var hourlyRates: String { "\(userRoot)/hourlyRates" }
     static var tags: String { "\(userRoot)/tags" }
-    static var rapidEvents: String { "\(userRoot)/rapidEvents" }
 }
