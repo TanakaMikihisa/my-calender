@@ -29,8 +29,7 @@ final class DailyScheduleNotificationScheduler: @unchecked Sendable {
     /// - Note: `actor` リポジトリの既定値は非隔離のデフォルト引数で生成できないため、省略時は本体で生成する。
     func reschedule(
         authRepository: AuthRepositoryProtocol? = nil,
-        eventRepository: EventRepositoryProtocol? = nil,
-        workShiftRepository: WorkShiftRepositoryProtocol? = nil
+        eventRepository: EventRepositoryProtocol? = nil
     ) async throws {
         guard isEnabled else {
             await removeAllDailyNotifications()
@@ -47,11 +46,6 @@ final class DailyScheduleNotificationScheduler: @unchecked Sendable {
         } else {
             FirestoreEventRepository()
         }
-        let shiftRepo: WorkShiftRepositoryProtocol = if let workShiftRepository {
-            workShiftRepository
-        } else {
-            FirestoreWorkShiftRepository()
-        }
 
         let center = UNUserNotificationCenter.current()
         let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
@@ -65,10 +59,7 @@ final class DailyScheduleNotificationScheduler: @unchecked Sendable {
 
         guard targetDayStart > now else { return }
 
-        async let eventsTask = eventRepo.listActiveOverlapping(start: targetDayStart, end: dayEnd)
-        async let shiftsTask = shiftRepo.listActiveOverlapping(start: targetDayStart, end: dayEnd)
-
-        let (events, shifts) = try await (eventsTask, shiftsTask)
+        let events = try await eventRepo.listActiveOverlapping(start: targetDayStart, end: dayEnd)
 
         center.removePendingNotificationRequests(withIdentifiers: [nextNotificationIdentifier])
 
@@ -78,7 +69,7 @@ final class DailyScheduleNotificationScheduler: @unchecked Sendable {
 
         let title = "今日の予定"
 
-        let body = Self.buildBody(events: events, shifts: shifts, timeFormatter: timeFormatter)
+        let body = Self.buildBody(events: events, timeFormatter: timeFormatter)
 
         let content = UNMutableNotificationContent()
         content.title = title
@@ -101,8 +92,7 @@ final class DailyScheduleNotificationScheduler: @unchecked Sendable {
     /// 確認用。呼び出し後すぐにスケジュールし、短い間隔で本番と同じタイトル・本文形式の通知を1件出す（遅延は呼び出し側で入れること。トグルOFFでも可）。
     func scheduleTestNotification(
         authRepository: AuthRepositoryProtocol? = nil,
-        eventRepository: EventRepositoryProtocol? = nil,
-        workShiftRepository: WorkShiftRepositoryProtocol? = nil
+        eventRepository: EventRepositoryProtocol? = nil
     ) async throws {
         let _: AuthRepositoryProtocol = if let authRepository {
             authRepository
@@ -113,11 +103,6 @@ final class DailyScheduleNotificationScheduler: @unchecked Sendable {
             eventRepository
         } else {
             FirestoreEventRepository()
-        }
-        let shiftRepo: WorkShiftRepositoryProtocol = if let workShiftRepository {
-            workShiftRepository
-        } else {
-            FirestoreWorkShiftRepository()
         }
 
         let center = UNUserNotificationCenter.current()
@@ -130,9 +115,7 @@ final class DailyScheduleNotificationScheduler: @unchecked Sendable {
         let dayEnd = targetDayStart.endOfDay(in: calendar)
         guard targetDayStart > now else { return }
 
-        async let eventsTask = eventRepo.listActiveOverlapping(start: targetDayStart, end: dayEnd)
-        async let shiftsTask = shiftRepo.listActiveOverlapping(start: targetDayStart, end: dayEnd)
-        let (events, shifts) = try await (eventsTask, shiftsTask)
+        let events = try await eventRepo.listActiveOverlapping(start: targetDayStart, end: dayEnd)
 
         center.removePendingNotificationRequests(withIdentifiers: [testNotificationIdentifier])
 
@@ -142,7 +125,7 @@ final class DailyScheduleNotificationScheduler: @unchecked Sendable {
 
         let content = UNMutableNotificationContent()
         content.title = "My Calender - 今日の予定"
-        content.body = Self.buildBody(events: events, shifts: shifts, timeFormatter: timeFormatter)
+        content.body = Self.buildBody(events: events, timeFormatter: timeFormatter)
         content.sound = UNNotificationSound.default
 
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
@@ -166,29 +149,17 @@ final class DailyScheduleNotificationScheduler: @unchecked Sendable {
 
     private static func buildBody(
         events: [Event],
-        shifts: [WorkShift],
         timeFormatter: DateFormatter
     ) -> String {
-        // 予定・勤務を1本のタイムラインに混ぜ、開始時刻順（同刻は終了時刻で安定ソート）
-        var items: [ScheduleDetailItem] = events.map { .event($0) }
-        items.append(contentsOf: shifts.map { .workShift($0) })
-        items.sort {
+        let sorted = events.sorted {
             if $0.startAt != $1.startAt { return $0.startAt < $1.startAt }
             return $0.endAt < $1.endAt
         }
 
         var lines: [String] = []
-        for item in items {
-            let name: String
-            switch item {
-            case let .event(e):
-                name = e.title
-            case let .workShift(s):
-                let company = s.companyName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                name = company.isEmpty ? "勤務" : company
-            }
-            let range = "\(timeFormatter.string(from: item.startAt))〜\(timeFormatter.string(from: item.endAt))"
-            lines.append("\(range) \(name)")
+        for e in sorted {
+            let range = "\(timeFormatter.string(from: e.startAt))〜\(timeFormatter.string(from: e.endAt))"
+            lines.append("\(range) \(e.title)")
         }
         if lines.isEmpty {
             return "予定はありません"

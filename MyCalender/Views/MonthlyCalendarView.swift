@@ -19,7 +19,6 @@ struct MonthlyCalendarView: View {
     var extraMonthsFuture: Int
     @Binding var selectedDate: Date
     var events: [Event]
-    var workShifts: [WorkShift]
     var tags: [Tag]
     var isLoading: Bool
     @Binding var isMultiSelectMode: Bool
@@ -40,7 +39,6 @@ struct MonthlyCalendarView: View {
         extraMonthsFuture: Int = 0,
         selectedDate: Binding<Date>,
         events: [Event],
-        workShifts: [WorkShift],
         tags: [Tag],
         isLoading: Bool,
         isMultiSelectMode: Binding<Bool> = .constant(false),
@@ -57,7 +55,6 @@ struct MonthlyCalendarView: View {
         self.extraMonthsFuture = extraMonthsFuture
         self._selectedDate = selectedDate
         self.events = events
-        self.workShifts = workShifts
         self.tags = tags
         self.isLoading = isLoading
         self._isMultiSelectMode = isMultiSelectMode
@@ -87,7 +84,7 @@ struct MonthlyCalendarView: View {
             }
             .refreshable { await onRefresh() }
             .overlay {
-                if isLoading, events.isEmpty, workShifts.isEmpty {
+                if isLoading, events.isEmpty {
                     SavingReturnArrowOverlay(isSaving: true)
                 }
             }
@@ -207,7 +204,6 @@ struct MonthlyCalendarView: View {
             multiSelectedDates: multiSelectedDates,
             isMultiSelectMode: isMultiSelectMode,
             events: events,
-            workShifts: workShifts,
             tags: tags,
             holidayStartOfDays: holidayStartOfDays
         )
@@ -300,7 +296,6 @@ struct MonthlyCalendarView: View {
         anchorMonth: Date(),
         selectedDate: .constant(Date()),
         events: [],
-        workShifts: [],
         tags: [],
         isLoading: false,
         isMultiSelectMode: .constant(false),

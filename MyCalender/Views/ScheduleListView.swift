@@ -1,38 +1,23 @@
 import SwiftUI
 
-/// 1日の予定を時間順のリストで表示（イベント＋勤務を開始時刻でソート）
+/// 1日の予定を時間順のリストで表示
 struct ScheduleListView: View {
     var dayStart: Date
     var dayEnd: Date
     var events: [Event]
-    var workShifts: [WorkShift]
     var tags: [Tag]
-    var payRates: [PayRate]
-    var hourlyRates: [HourlyRate] = []
-    var shiftTemplates: [ShiftTemplate] = []
-    @Binding var selectedDetailItem: ScheduleDetailItem?
+    @Binding var selectedDetailItem: Event?
     var onDeleteEvent: ((Event) -> Void)?
-    var onDeleteWorkShift: ((WorkShift) -> Void)?
-    /// プルで更新時に呼ぶ async 処理（DayView で refreshAsync を渡す）
     var onRefresh: (() async -> Void)?
 
-    private var sortedItems: [ScheduleItem] {
-        let eventItems = events.map { ScheduleItem.event($0) }
-        let shiftItems = workShifts.map { ScheduleItem.workShift($0) }
-        return (eventItems + shiftItems)
+    private var sortedEvents: [Event] {
+        events
             .filter { $0.startAt >= dayStart && $0.startAt < dayEnd }
             .sorted { $0.startAt < $1.startAt }
     }
 
-    private func detailItem(for item: ScheduleItem) -> ScheduleDetailItem {
-        switch item {
-        case .event(let e): return .event(e)
-        case .workShift(let s): return .workShift(s)
-        }
-    }
-
     var body: some View {
-        if sortedItems.isEmpty {
+        if sortedEvents.isEmpty {
             ContentUnavailableView(
                 "予定がありません",
                 systemImage: "calendar",
@@ -40,26 +25,23 @@ struct ScheduleListView: View {
             )
         } else {
             List {
-                ForEach(sortedItems) { item in
-                    NavigationLink(value: detailItem(for: item)) {
-                        ScheduleRowView(item: item, tags: tags, payRates: payRates)
+                ForEach(sortedEvents) { event in
+                    NavigationLink(value: event) {
+                        ScheduleRowView(event: event, tags: tags)
                     }
                     .contextMenu {
                         Button("詳細を開く") {
                             FeedBack().feedback(.medium)
-                            selectedDetailItem = detailItem(for: item)
+                            selectedDetailItem = event
                         }
                         Button("削除", role: .destructive) {
                             FeedBack().feedback(.heavy)
                             withAnimation(.easeOut(duration: 0.25)) {
-                                switch item {
-                                case .event(let e): onDeleteEvent?(e)
-                                case .workShift(let s): onDeleteWorkShift?(s)
-                                }
+                                onDeleteEvent?(event)
                             }
                         }
                     } preview: {
-                        ScheduleDetailView(item: detailItem(for: item), tags: tags, payRates: payRates, hourlyRates: hourlyRates, shiftTemplates: shiftTemplates, onRefresh: {}, onDismiss: nil)
+                        ScheduleDetailView(event: event, tags: tags, onRefresh: {}, onDismiss: nil)
                             .frame(width: 320, height: 400)
                     }
                 }
@@ -72,72 +54,17 @@ struct ScheduleListView: View {
     }
 }
 
-private enum ScheduleItem: Identifiable {
-    case event(Event)
-    case workShift(WorkShift)
-
-    var id: String {
-        switch self {
-        case .event(let e): return "e-\(e.id)"
-        case .workShift(let s): return "s-\(s.id)"
-        }
-    }
-    var startAt: Date {
-        switch self {
-        case .event(let e): return e.startAt
-        case .workShift(let s): return s.startAt
-        }
-    }
-    var endAt: Date {
-        switch self {
-        case .event(let e): return e.endAt
-        case .workShift(let s): return s.endAt
-        }
-    }
-    var title: String {
-        switch self {
-        case .event(let e): return e.title
-        case .workShift: return "勤務"
-        }
-    }
-    var note: String? {
-        switch self {
-        case .event(let e): return e.note
-        case .workShift: return nil
-        }
-    }
-    var colorHex: String? {
-        switch self {
-        case .event: return nil
-        case .workShift: return "#F97316"
-        }
-    }
-}
-
 private struct ScheduleRowView: View {
-    let item: ScheduleItem
+    let event: Event
     let tags: [Tag]
-    let payRates: [PayRate]
 
     private var tagColorHex: String? {
-        switch item {
-        case .event(let e):
-            for id in e.tagIds {
-                if let tag = tags.first(where: { $0.id == id }) {
-                    return tag.colorHex
-                }
+        for id in event.tagIds {
+            if let tag = tags.first(where: { $0.id == id }) {
+                return tag.colorHex
             }
-            return Constants.defaultBoxColorSentinel
-        case .workShift:
-            return "#F97316"
         }
-    }
-
-    private var rowTitle: String {
-        switch item {
-        case .event(let e): return e.title
-        case .workShift(let s): return s.displayTitle(payRates: payRates)
-        }
+        return Constants.defaultBoxColorSentinel
     }
 
     var body: some View {
@@ -146,13 +73,13 @@ private struct ScheduleRowView: View {
                 .fill(scheduleBarColor(tagColorHex))
                 .frame(width: 4)
             VStack(alignment: .leading, spacing: 4) {
-                Text(rowTitle)
+                Text(event.title)
                     .font(.headline)
                     .foregroundStyle(.black)
-                Text("\(item.startAt.formatted(date: .omitted, time: .shortened)) 〜 \(item.endAt.formatted(date: .omitted, time: .shortened))")
+                Text("\(event.startAt.formatted(date: .omitted, time: .shortened)) 〜 \(event.endAt.formatted(date: .omitted, time: .shortened))")
                     .font(.caption)
                     .foregroundStyle(.black)
-                if let note = item.note, !note.isEmpty {
+                if let note = event.note, !note.isEmpty {
                     Text(note)
                         .font(.caption)
                         .foregroundStyle(.black)
@@ -171,4 +98,3 @@ private struct ScheduleRowView: View {
         return AnyShapeStyle(Color.from(hex: hex).opacity(0.45))
     }
 }
-

@@ -1,19 +1,13 @@
 import SwiftUI
 
-/// 1日の時間軸＋イベント/シフトをボックスで表示。単位(15/30/60/180分)と現在時刻の水辺線に対応。
+/// 1日の時間軸＋イベントをボックスで表示。単位(15/30/60/180分)と現在時刻の水辺線に対応。
 struct TimeAxisDayView: View {
     var dayStart: Date
     var unitMinutes: Int
     var events: [Event]
-    var workShifts: [WorkShift]
     var tags: [Tag]
-    var payRates: [PayRate]
-    var hourlyRates: [HourlyRate] = []
-    var shiftTemplates: [ShiftTemplate] = []
     var onSelectEvent: ((Event) -> Void)?
-    var onSelectWorkShift: ((WorkShift) -> Void)?
     var onDeleteEvent: ((Event) -> Void)?
-    var onDeleteWorkShift: ((WorkShift) -> Void)?
     /// プルで更新時に呼ぶ async 処理（DayView で refreshAsync を渡す）
     var onRefresh: (() async -> Void)?
 
@@ -21,8 +15,8 @@ struct TimeAxisDayView: View {
     private var dayEnd: Date {
         calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart.addingTimeInterval(86400)
     }
+
     private var blocksPerDay: Int { 24 * 60 / unitMinutes }
-    /// 1ブロックあたりの縦幅（pt）。1時間単位のときは少し広くする。
     private var pointsPerBlock: CGFloat { unitMinutes == 60 ? 56 : 48 }
     private var timelineTotalHeight: CGFloat { CGFloat(blocksPerDay) * pointsPerBlock }
 
@@ -31,7 +25,7 @@ struct TimeAxisDayView: View {
             ZStack(alignment: .topLeading) {
                 timeRuler
                 timeGridLines
-                eventAndShiftBlocks
+                eventBlocks
                 currentTimeLine
             }
             .frame(height: timelineTotalHeight)
@@ -62,7 +56,6 @@ struct TimeAxisDayView: View {
         }
     }
 
-    /// 時間軸の区切りごとの薄い灰色の水平線（VStack でレイアウトし 0:00 から全線を確実に表示）
     private var timeGridLines: some View {
         VStack(spacing: 0) {
             ForEach(0..<blocksPerDay, id: \.self) { _ in
@@ -80,8 +73,8 @@ struct TimeAxisDayView: View {
         .allowsHitTesting(false)
     }
 
-    private var eventAndShiftBlocks: some View {
-        let eventBlocks = events.map { event in
+    private var eventBlocks: some View {
+        let raw = events.map { event in
             BlockInfo(
                 id: event.id,
                 start: clamp(event.startAt, min: dayStart, max: dayEnd),
@@ -90,26 +83,11 @@ struct TimeAxisDayView: View {
                 note: event.note,
                 colorHex: tagColorHex(for: event),
                 event: event,
-                workShift: nil,
                 columnIndex: 0,
                 totalColumns: 1
             )
         }
-        let shiftBlocks = workShifts.map { shift in
-            BlockInfo(
-                id: shift.id,
-                start: clamp(shift.startAt, min: dayStart, max: dayEnd),
-                end: clamp(shift.endAt, min: dayStart, max: dayEnd),
-                title: shift.displayTitle(payRates: payRates),
-                note: nil,
-                colorHex: "#F97316",
-                event: nil,
-                workShift: shift,
-                columnIndex: 0,
-                totalColumns: 1
-            )
-        }
-        let raw = (eventBlocks + shiftBlocks).filter { $0.start < $0.end }
+        .filter { $0.start < $0.end }
         let all = assignColumns(raw)
         return GeometryReader { geometry in
             let contentWidth = geometry.size.width
@@ -121,8 +99,7 @@ struct TimeAxisDayView: View {
                     let x = contentWidth * CGFloat(block.columnIndex) / CGFloat(block.totalColumns)
                     Button {
                         FeedBack().feedback(.medium)
-                        if let e = block.event { onSelectEvent?(e) }
-                        else if let s = block.workShift { onSelectWorkShift?(s) }
+                        onSelectEvent?(block.event)
                     } label: {
                         timelineBlockContent(block, height: h)
                     }
@@ -131,25 +108,13 @@ struct TimeAxisDayView: View {
                     .contentShape(Rectangle())
                     .offset(x: x, y: y)
                     .contextMenu {
-                        if let e = block.event {
-                            Button("詳細を開く") { onSelectEvent?(e) }
-                            Button("削除", role: .destructive) {
-                                withAnimation(.easeOut(duration: 0.25)) { onDeleteEvent?(e) }
-                            }
-                        } else if let s = block.workShift {
-                            Button("詳細を開く") { onSelectWorkShift?(s) }
-                            Button("削除", role: .destructive) {
-                                withAnimation(.easeOut(duration: 0.25)) { onDeleteWorkShift?(s) }
-                            }
+                        Button("詳細を開く") { onSelectEvent?(block.event) }
+                        Button("削除", role: .destructive) {
+                            withAnimation(.easeOut(duration: 0.25)) { onDeleteEvent?(block.event) }
                         }
                     } preview: {
-                        if let e = block.event {
-                            ScheduleDetailView(item: .event(e), tags: tags, payRates: payRates, hourlyRates: hourlyRates, shiftTemplates: shiftTemplates, onRefresh: {}, onDismiss: nil)
-                                .frame(width: 320, height: 400)
-                        } else if let s = block.workShift {
-                            ScheduleDetailView(item: .workShift(s), tags: tags, payRates: payRates, hourlyRates: hourlyRates, shiftTemplates: shiftTemplates, onRefresh: {}, onDismiss: nil)
-                                .frame(width: 320, height: 400)
-                        }
+                        ScheduleDetailView(event: block.event, tags: tags, onRefresh: {}, onDismiss: nil)
+                            .frame(width: 320, height: 400)
                     }
                 }
             }
@@ -157,7 +122,6 @@ struct TimeAxisDayView: View {
         .padding(.leading, 52)
     }
 
-    /// 重なっているブロックに列インデックスを割り当て（横並びで幅分割するため）
     private func assignColumns(_ blocks: [BlockInfo]) -> [BlockInfo] {
         let sorted = blocks.sorted { $0.start < $1.start }
         var columnEndTimes: [Date] = []
@@ -184,18 +148,16 @@ struct TimeAxisDayView: View {
                 note: block.note,
                 colorHex: block.colorHex,
                 event: block.event,
-                workShift: block.workShift,
                 columnIndex: columnIndices[index],
                 totalColumns: totalCols
             )
         }
     }
 
-    /// 現在時刻の水辺線（表示日が「今日」のときだけ表示し、1分ごとに位置を更新）
     private var currentTimeLine: some View {
         TimelineView(.periodic(from: Date(), by: 60)) { context in
             let now = context.date
-            if now >= dayStart && now < dayEnd {
+            if now >= dayStart, now < dayEnd {
                 let y = offsetY(from: now)
                 Rectangle()
                     .fill(Color.red.opacity(0.8))
@@ -208,9 +170,7 @@ struct TimeAxisDayView: View {
         .allowsHitTesting(false)
     }
 
-    /// タイトルを表示する最小の高さ（これ未満は枠のみ）
     private let minHeightToShowTitle: CGFloat = 35
-    /// タイトル＋メモを表示する最小の高さ（これ未満はタイトルのみ）
     private let minHeightToShowTitleAndMemo: CGFloat = 48
 
     private func timelineBlockContent(_ block: BlockInfo, height: CGFloat) -> some View {
@@ -242,7 +202,6 @@ struct TimeAxisDayView: View {
             .padding(5)
     }
 
-    /// 1分あたりの縦幅（ブロック単位でなく分単位で統一し、微妙な時刻でもずれないようにする）
     private var pointsPerMinute: CGFloat {
         pointsPerBlock / CGFloat(unitMinutes)
     }
@@ -295,13 +254,11 @@ private struct BlockInfo: Identifiable {
     let title: String
     let note: String?
     let colorHex: String
-    let event: Event?
-    let workShift: WorkShift?
+    let event: Event
     var columnIndex: Int
     var totalColumns: Int
 }
 
-// MARK: - Preview
 #Preview {
     let cal = Calendar.current
     let today = cal.startOfDay(for: Date())
@@ -313,7 +270,6 @@ private struct BlockInfo: Identifiable {
         Event(id: "pe1", type: .normal, title: "ミーティング", startAt: start1, endAt: end1, note: "会議メモ", tagIds: ["pt1"], isActive: true, createdAt: .distantPast, updatedAt: .distantPast),
         Event(id: "pe2", type: .normal, title: "作業", startAt: start2, endAt: end2, note: nil, tagIds: [], isActive: true, createdAt: .distantPast, updatedAt: .distantPast)
     ]
-    let workShifts: [WorkShift] = []
     let tags = [Tag(id: "pt1", name: "仕事", colorHex: "#34C759", isActive: true, createdAt: .distantPast, updatedAt: .distantPast)]
-    TimeAxisDayView(dayStart: today, unitMinutes: 60, events: events, workShifts: workShifts, tags: tags, payRates: [], hourlyRates: [], onSelectEvent: nil, onSelectWorkShift: nil, onDeleteEvent: nil, onDeleteWorkShift: nil)
+    TimeAxisDayView(dayStart: today, unitMinutes: 60, events: events, tags: tags, onSelectEvent: nil, onDeleteEvent: nil)
 }

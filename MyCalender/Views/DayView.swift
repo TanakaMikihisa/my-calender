@@ -2,13 +2,11 @@ import SwiftUI
 
 /// 1日まわりの表示（右下メニューで表示モードを選択）
 private enum DayPanelKind: Equatable {
-    /// 1時間おきの時間軸
     case hourlyTimeline
     case list
-    case monthlyWorkShift
 }
 
-/// メイン画面の表示モード（`day` に時間軸・リスト・勤務をまとめ、`monthlyCalendar` を追加）
+/// メイン画面の表示モード（`day` に時間軸・リストをまとめ、`monthlyCalendar` を追加）
 private enum DayViewMode: Equatable {
     case day(DayPanelKind)
     case monthlyCalendar
@@ -18,24 +16,20 @@ private enum DayViewMode: Equatable {
 private enum MainToolbarDisplayOption: Int, CaseIterable, Hashable {
     case hourlyTimeline = 0
     case list = 1
-    case monthlyWorkShift = 2
-    case monthlyCalendar = 3
+    case monthlyCalendar = 2
 
     var title: String {
         switch self {
         case .hourlyTimeline: return "タイムライン"
         case .list: return "スタック"
-        case .monthlyWorkShift: return "ワークシフト"
         case .monthlyCalendar: return "カレンダー"
         }
     }
 
-    /// ツールバー上のピッカーに出す SF Symbol（従来の各ボタンと同じ）
     var symbolName: String {
         switch self {
         case .hourlyTimeline: return "list.dash"
         case .list: return "list.bullet.clipboard"
-        case .monthlyWorkShift: return "rectangle.grid.1x2"
         case .monthlyCalendar: return "calendar"
         }
     }
@@ -50,7 +44,7 @@ struct DayView: View {
     )
     @State private var isPresentingCreateSheet = false
     @State private var showErrorAlert = false
-    @State private var selectedDetailItem: ScheduleDetailItem?
+    @State private var selectedDetailItem: Event?
     /// 横スワイプの現在値（正=右方向=前日、負=左方向=翌日）。矢印表示に使用
     @State private var swipeTranslation: CGFloat = 0
     /// 「今日」ボタン用の巻き戻し風エフェクト（0=非表示、1=最大）。`swipeTranslation` とは独立
@@ -58,17 +52,14 @@ struct DayView: View {
     @State private var displayMode: DayViewMode = .day(.hourlyTimeline)
     @State private var hasSyncedDisplayModeFromStorage = false
     @State private var showWeatherSheet = false
-    /// 月次勤務ビューで表示する月（任意の日付でよい）
-    @State private var monthlyViewMonth = Date()
     /// 縦スクロール月カレンダーの基準月（初回スクロール位置）
     @State private var calendarAnchorMonth = Date()
     @State private var monthCalendarViewModel = MonthCalendarViewModel()
-    @State private var monthlyWorkShiftViewModel = MonthlyWorkShiftViewModel(month: Date())
     /// 月カレンダー内を「今日」の月へスクロールさせる（`MonthlyCalendarView` が `onChange` で処理）
     @State private var monthCalendarScrollToTodayTrigger: UUID?
     /// 月カレンダーで日付を選んだときに開く「その日の時間軸」シート
     @State private var calendarDayTimelineSheetItem: CalendarDayTimelineSheetItem?
-    @State private var sheetScheduleDetailItem: ScheduleDetailItem?
+    @State private var sheetScheduleDetailItem: Event?
     @State private var isMonthCalendarSelectionMode = false
     @State private var monthCalendarSelectedDates: Set<Date> = []
 
@@ -83,59 +74,12 @@ struct DayView: View {
         return false
     }
 
-    /// 月次勤務時：< ○月 > で月を切り替え（グレーの丸・グレー文字）
-    private var monthNavigationView: some View {
-        let cal = Calendar.current
-        let monthInt = cal.component(.month, from: monthlyViewMonth)
-        return HStack(spacing: 16) {
-            Button {
-                FeedBack().feedback(.medium)
-                if let prev = cal.date(byAdding: .month, value: -1, to: monthlyViewMonth) {
-                    monthlyViewMonth = prev
-                }
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Color(.systemGray))
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color(.systemGray5)))
-            }
-            Text("\(monthInt)月")
-                .font(.title2.weight(.medium))
-            Button {
-                FeedBack().feedback(.medium)
-                if let next = cal.date(byAdding: .month, value: 1, to: monthlyViewMonth) {
-                    monthlyViewMonth = next
-                }
-            } label: {
-                Image(systemName: "chevron.right")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Color(.systemGray))
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color(.systemGray5)))
-            }
-        }
-    }
-
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 // 上バー：左に天気、右に日付 or 月ナビ（< ○月 >）
                 ZStack(alignment: .topLeading) {
-                    if case .day(.monthlyWorkShift) = displayMode {
-                        HStack {
-                            dayWeatherView
-                                .onTapGesture {
-                                    FeedBack().feedback(.medium)
-                                    showWeatherSheet = true
-                                }
-                            Spacer(minLength: 0)
-                            monthNavigationView
-                        }
-                        .padding(.leading, 16)
-                        .padding(.trailing, 16)
-                        .padding(.top, 8)
-                    } else if displayMode == .monthlyCalendar {
+                    if displayMode == .monthlyCalendar {
                         HStack {
                             dayWeatherView
                                 .onTapGesture {
@@ -167,8 +111,6 @@ struct DayView: View {
                     switch displayMode {
                     case .monthlyCalendar:
                         break
-                    case let .day(kind) where kind == .monthlyWorkShift:
-                        break
                     default:
                         viewModel.refresh()
                     }
@@ -179,9 +121,6 @@ struct DayView: View {
                         switch kind {
                         case .hourlyTimeline, .list:
                             viewModel.refresh()
-                        case .monthlyWorkShift:
-                            monthlyWorkShiftViewModel.month = monthlyViewMonth
-                            monthlyWorkShiftViewModel.refresh()
                         }
                     case .monthlyCalendar:
                         calendarAnchorMonth = viewModel.date
@@ -198,15 +137,9 @@ struct DayView: View {
                                 dayStart: dayStart,
                                 unitMinutes: 60,
                                 events: viewModel.events,
-                                workShifts: viewModel.workShifts,
                                 tags: viewModel.tags,
-                                payRates: viewModel.payRates,
-                                hourlyRates: viewModel.hourlyRates,
-                                shiftTemplates: viewModel.shiftTemplates,
-                                onSelectEvent: { selectedDetailItem = .event($0) },
-                                onSelectWorkShift: { selectedDetailItem = .workShift($0) },
+                                onSelectEvent: { selectedDetailItem = $0 },
                                 onDeleteEvent: { viewModel.deleteEvent($0) },
-                                onDeleteWorkShift: { viewModel.deleteWorkShift($0) },
                                 onRefresh: { await viewModel.refreshAsync() }
                             )
                         case .day(.list):
@@ -214,14 +147,9 @@ struct DayView: View {
                                 dayStart: dayStart,
                                 dayEnd: dayEnd,
                                 events: viewModel.events,
-                                workShifts: viewModel.workShifts,
                                 tags: viewModel.tags,
-                                payRates: viewModel.payRates,
-                                hourlyRates: viewModel.hourlyRates,
-                                shiftTemplates: viewModel.shiftTemplates,
                                 selectedDetailItem: $selectedDetailItem,
                                 onDeleteEvent: { viewModel.deleteEvent($0) },
-                                onDeleteWorkShift: { viewModel.deleteWorkShift($0) },
                                 onRefresh: { await viewModel.refreshAsync() }
                             )
                         case .monthlyCalendar:
@@ -235,7 +163,6 @@ struct DayView: View {
                                     set: { viewModel.date = $0 }
                                 ),
                                 events: viewModel.calendarRangeEvents,
-                                workShifts: viewModel.calendarRangeWorkShifts,
                                 tags: viewModel.tags,
                                 isLoading: viewModel.isLoadingCalendarRange,
                                 isMultiSelectMode: $isMonthCalendarSelectionMode,
@@ -256,12 +183,6 @@ struct DayView: View {
                                     viewModel.requestExpandCalendarRangeFutureOneYear(around: calendarAnchorMonth)
                                 },
                                 scrollToTodayTrigger: $monthCalendarScrollToTodayTrigger
-                            )
-                        case .day(.monthlyWorkShift):
-                            MonthlyWorkShiftGridView(
-                                viewModel: monthlyWorkShiftViewModel,
-                                selectedMonth: $monthlyViewMonth,
-                                onSelectWorkShift: { selectedDetailItem = .workShift($0) }
                             )
                         }
                     }
@@ -451,11 +372,11 @@ struct DayView: View {
                         }
                 )
             }
-            .navigationDestination(for: ScheduleDetailItem.self) { item in
-                ScheduleDetailView(item: item, tags: viewModel.tags, payRates: viewModel.payRates, hourlyRates: viewModel.hourlyRates, shiftTemplates: viewModel.shiftTemplates, onRefresh: { viewModel.refresh() }, onDismiss: nil)
+            .navigationDestination(for: Event.self) { item in
+                ScheduleDetailView(event: item, tags: viewModel.tags, onRefresh: { viewModel.refresh() }, onDismiss: nil)
             }
             .navigationDestination(item: $selectedDetailItem) { item in
-                ScheduleDetailView(item: item, tags: viewModel.tags, payRates: viewModel.payRates, hourlyRates: viewModel.hourlyRates, shiftTemplates: viewModel.shiftTemplates, onRefresh: { viewModel.refresh() }, onDismiss: { selectedDetailItem = nil })
+                ScheduleDetailView(event: item, tags: viewModel.tags, onRefresh: { viewModel.refresh() }, onDismiss: { selectedDetailItem = nil })
             }
             .sheet(isPresented: $isPresentingCreateSheet) {
                 CreateItemSheet(
@@ -521,6 +442,16 @@ struct DayView: View {
                         lastMainDisplayModeRaw = legacyIsTimeAxis
                             ? MainToolbarDisplayOption.hourlyTimeline.rawValue
                             : MainToolbarDisplayOption.list.rawValue
+                    } else {
+                        let migrationKey = "mainDisplayModeRaw_workShiftRemoval_v1"
+                        if !UserDefaults.standard.bool(forKey: migrationKey) {
+                            if lastMainDisplayModeRaw == 3 {
+                                lastMainDisplayModeRaw = MainToolbarDisplayOption.monthlyCalendar.rawValue
+                            } else if lastMainDisplayModeRaw == 2 {
+                                lastMainDisplayModeRaw = MainToolbarDisplayOption.hourlyTimeline.rawValue
+                            }
+                            UserDefaults.standard.set(true, forKey: migrationKey)
+                        }
                     }
                     let option = MainToolbarDisplayOption(rawValue: lastMainDisplayModeRaw) ?? .hourlyTimeline
                     if option != toolbarDisplayOption(from: displayMode) {
@@ -550,7 +481,6 @@ struct DayView: View {
             switch kind {
             case .hourlyTimeline: return .hourlyTimeline
             case .list: return .list
-            case .monthlyWorkShift: return .monthlyWorkShift
             }
         }
     }
@@ -590,13 +520,8 @@ struct DayView: View {
     private var bottomFloatingControlsClearanceHeight: CGFloat? {
         switch displayMode {
         case .monthlyCalendar: return nil
-        case let .day(kind):
-            switch kind {
-            case .hourlyTimeline, .list:
-                return 108
-            case .monthlyWorkShift:
-                return 72
-            }
+        case .day:
+            return 108
         }
     }
 
@@ -616,11 +541,6 @@ struct DayView: View {
                 displayMode = .day(.hourlyTimeline)
             case .list:
                 displayMode = .day(.list)
-            case .monthlyWorkShift:
-                displayMode = .day(.monthlyWorkShift)
-                monthlyViewMonth = viewModel.date
-                monthlyWorkShiftViewModel.month = monthlyViewMonth
-                monthlyWorkShiftViewModel.refresh()
             case .monthlyCalendar:
                 calendarAnchorMonth = viewModel.date
                 displayMode = .monthlyCalendar
@@ -633,7 +553,7 @@ struct DayView: View {
         }
     }
 
-    /// 日付を今日にし、月カレンダーでは該当月へスクロール。勤務表では表示月を今日の月に合わせる。
+    /// 日付を今日にし、月カレンダーでは該当月へスクロール。
     private func goToToday() {
         FeedBack().feedback(.medium)
         playGoToTodayReturnEffect()
@@ -642,11 +562,6 @@ struct DayView: View {
             viewModel.selectTodayAndRefreshCalendarRange()
             calendarAnchorMonth = viewModel.date
             monthCalendarScrollToTodayTrigger = UUID()
-        case .day(.monthlyWorkShift):
-            viewModel.selectToday()
-            monthlyViewMonth = viewModel.date
-            monthlyWorkShiftViewModel.month = monthlyViewMonth
-            monthlyWorkShiftViewModel.refresh()
         case .day(.hourlyTimeline), .day(.list):
             viewModel.selectToday()
         }
@@ -812,7 +727,7 @@ private struct CalendarDayTimelineSheetItem: Identifiable, Hashable {
 private struct CalendarDayTimelineSheetHost: View {
     let dayStart: Date
     @Bindable var viewModel: DayViewModel
-    @Binding var sheetDetail: ScheduleDetailItem?
+    @Binding var sheetDetail: Event?
     let displayMode: DayViewMode
     let calendarAnchorMonth: Date
     let onDismissSheet: () -> Void
@@ -831,24 +746,15 @@ private struct CalendarDayTimelineSheetHost: View {
                     dayStart: dayStart,
                     unitMinutes: 60,
                     events: viewModel.events,
-                    workShifts: viewModel.workShifts,
                     tags: viewModel.tags,
-                    payRates: viewModel.payRates,
-                    hourlyRates: viewModel.hourlyRates,
-                    shiftTemplates: viewModel.shiftTemplates,
-                    onSelectEvent: { sheetDetail = .event($0) },
-                    onSelectWorkShift: { sheetDetail = .workShift($0) },
+                    onSelectEvent: { sheetDetail = $0 },
                     onDeleteEvent: { viewModel.deleteEvent($0) },
-                    onDeleteWorkShift: { viewModel.deleteWorkShift($0) },
                     onRefresh: { await viewModel.refreshAsync() }
                 )
                 .navigationDestination(item: $sheetDetail) { item in
                     ScheduleDetailView(
-                        item: item,
+                        event: item,
                         tags: viewModel.tags,
-                        payRates: viewModel.payRates,
-                        hourlyRates: viewModel.hourlyRates,
-                        shiftTemplates: viewModel.shiftTemplates,
                         onRefresh: {
                             viewModel.refresh()
                             if displayMode == .monthlyCalendar {
